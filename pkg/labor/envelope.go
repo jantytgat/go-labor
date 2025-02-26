@@ -1,25 +1,10 @@
 package labor
 
-type EventTriggerer interface {
-	HasEvent() bool
-	Event() Event
-}
+import "context"
 
 type Envelope struct {
+	ctx      context.Context
 	Sender   string
 	Receiver string
 	Message  any
-}
-
-func (e *Envelope) HasEvent() bool {
-	_, ok := e.Message.(EventTriggerer)
-	return ok
-}
-
-func (e *Envelope) Event() Event {
-	event, ok := e.Message.(EventTriggerer)
-	if ok {
-		return event.Event()
-	}
-	return ""
 }
