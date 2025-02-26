@@ -11,6 +11,16 @@ const (
 	LocalLocation    Location = LocalAddress
 )
 
+type Addressable interface {
+	Address() *Address
+}
+
+type Kind string
+
+func (k Kind) String() string {
+	return string(k)
+}
+
 type Location string
 
 func (l Location) String() string {

@@ -48,13 +48,13 @@ func TestNewAddress(t *testing.T) {
 			name: "root",
 			args: args{
 				location: LocalLocation,
-				kind:     "factory",
+				kind:     "manager",
 				id:       "root",
 			},
 			want: &Address{
 				parent:   nil,
 				location: LocalLocation,
-				kind:     "factory",
+				kind:     "manager",
 				id:       "root",
 			},
 		},
@@ -80,13 +80,13 @@ func TestAddress_Child(t *testing.T) {
 		want   *Address
 	}{
 		{
-			name:   "root",
-			parent: NewAddress(LocalLocation, "factory", "root"),
+			name:   "manager",
+			parent: NewAddress(LocalLocation, "manager", "root"),
 			args: args{
-				kind: "shed",
-				id:   "shed",
+				kind: "router",
+				id:   "root",
 			},
-			want: NewAddress(LocalLookupAddress, "factory", "root").Child("shed", "shed"),
+			want: NewAddress(LocalAddress, "manager", "root").Child("router", "root"),
 		},
 	}
 	for _, tt := range tests {
@@ -105,18 +105,18 @@ func TestAddress_HasParent(t *testing.T) {
 		want    bool
 	}{
 		{
-			name:    "factory",
-			address: NewAddress(LocalLocation, "factory", "factory"),
+			name:    "manager",
+			address: NewAddress(LocalLocation, "manager", "root"),
 			want:    false,
 		},
 		{
-			name:    "shed",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed"),
+			name:    "operator",
+			address: NewAddress(LocalLocation, "manager", "root").Child("router", "true"),
 			want:    true,
 		},
 		{
-			name:    "process",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed").Child("process", "process"),
+			name:    "worker",
+			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
 			want:    true,
 		},
 	}
@@ -136,19 +136,19 @@ func TestAddress_Parent(t *testing.T) {
 		want    *Address
 	}{
 		{
-			name:    "factory",
-			address: NewAddress(LocalLocation, "factory", "factory"),
+			name:    "manager",
+			address: NewAddress(LocalLocation, "manager", "root"),
 			want:    nil,
 		},
 		{
-			name:    "shed",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed"),
-			want:    &Address{parent: nil, location: LocalLocation, kind: "factory", id: "factory"},
+			name:    "operator",
+			address: NewAddress(LocalLocation, "manager", "root").Child("router", "true"),
+			want:    &Address{parent: nil, location: LocalLocation, kind: "manager", id: "root"},
 		},
 		{
-			name:    "process",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed").Child("process", "process"),
-			want:    &Address{parent: &Address{parent: nil, location: LocalLocation, kind: "factory", id: "factory"}, kind: "shed", id: "shed"},
+			name:    "worker",
+			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			want:    &Address{parent: &Address{parent: nil, location: LocalLocation, kind: "manager", id: "root"}, kind: "operator", id: "root"},
 		},
 	}
 	for _, tt := range tests {
@@ -167,19 +167,19 @@ func TestAddress_String(t *testing.T) {
 		want    string
 	}{
 		{
-			name:    "factory",
-			address: NewAddress(LocalLocation, "factory", "factory"),
-			want:    "local/factory/factory",
+			name:    "manager",
+			address: NewAddress(LocalLocation, "manager", "root"),
+			want:    "local/manager/root",
 		},
 		{
-			name:    "shed",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed"),
-			want:    "local/factory/factory/shed/shed",
+			name:    "router",
+			address: NewAddress(LocalLocation, "manager", "root").Child("router", "root"),
+			want:    "local/manager/root/router/root",
 		},
 		{
-			name:    "process",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed").Child("process", "process"),
-			want:    "local/factory/factory/shed/shed/process/process",
+			name:    "worker",
+			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			want:    "local/manager/root/operator/root/worker/1",
 		},
 	}
 	for _, tt := range tests {
@@ -198,19 +198,19 @@ func TestAddress_LogValue(t *testing.T) {
 		want    slog.Value
 	}{
 		{
-			name:    "factory",
-			address: NewAddress(LocalLocation, "factory", "factory"),
-			want:    slog.StringValue("local/factory/factory"),
+			name:    "manager",
+			address: NewAddress(LocalLocation, "manager", "root"),
+			want:    slog.StringValue("local/manager/root"),
 		},
 		{
-			name:    "shed",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed"),
-			want:    slog.StringValue("local/factory/factory/shed/shed"),
+			name:    "router",
+			address: NewAddress(LocalLocation, "manager", "root").Child("router", "root"),
+			want:    slog.StringValue("local/manager/root/router/root"),
 		},
 		{
-			name:    "process",
-			address: NewAddress(LocalLocation, "factory", "factory").Child("shed", "shed").Child("process", "process"),
-			want:    slog.StringValue("local/factory/factory/shed/shed/process/process"),
+			name:    "worker",
+			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			want:    slog.StringValue("local/manager/root/operator/root/worker/1"),
 		},
 	}
 	for _, tt := range tests {
