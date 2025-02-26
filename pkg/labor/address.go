@@ -6,9 +6,13 @@ import (
 )
 
 const (
-	addressSeparator          = "/"
-	LocalAddress              = "local"
-	LocalLocation    Location = LocalAddress
+	addressSeparator = "/"
+
+	LocalAddress     = "local"
+	BroadcastAddress = "broadcast"
+
+	BroadcastLocation Location = Location(BroadcastAddress)
+	LocalLocation              = Location(LocalAddress)
 )
 
 type Addressable interface {
@@ -43,6 +47,24 @@ func (a *Address) HasParent() bool {
 	return a.parent != nil
 }
 
+func (a *Address) IsBroadcast() bool {
+	if a.parent != nil {
+		return a.parent.IsBroadcast()
+	}
+	return a.location == BroadcastLocation
+}
+
+func (a *Address) IsLocal() bool {
+	if a.parent != nil {
+		return a.parent.IsLocal()
+	}
+	return a.location == LocalLocation
+}
+
+func (a *Address) LogValue() slog.Value {
+	return slog.StringValue(a.String())
+}
+
 func (a *Address) Parent() *Address {
 	return a.parent
 }
@@ -53,8 +75,4 @@ func (a *Address) String() string {
 	} else {
 		return strings.Join([]string{a.location.String(), a.kind.String(), a.id}, addressSeparator)
 	}
-}
-
-func (a *Address) LogValue() slog.Value {
-	return slog.StringValue(a.String())
 }

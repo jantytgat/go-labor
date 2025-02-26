@@ -18,6 +18,11 @@ func TestLocation_String(t *testing.T) {
 			want: LocalAddress,
 		},
 		{
+			name: "broadcast",
+			l:    BroadcastLocation,
+			want: BroadcastAddress,
+		},
+		{
 			name: "remote",
 			l:    "remote",
 			want: "remote",
@@ -217,6 +222,98 @@ func TestAddress_LogValue(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.address.LogValue(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("LogValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAddress_IsBroadcast(t *testing.T) {
+	tests := []struct {
+		name    string
+		address *Address
+		want    bool
+	}{
+		{
+			name:    "rootNonBroadcast",
+			address: NewAddress(LocalLocation, "manager", "root"),
+			want:    false,
+		},
+		{
+			name:    "rootBroadcast",
+			address: NewAddress(BroadcastLocation, "manager", "root"),
+			want:    true,
+		},
+		{
+			name:    "nestedNonBroadcast",
+			address: NewAddress(LocalLocation, "manager", "root").Child("router", "root"),
+			want:    false,
+		},
+		{
+			name:    "nestedBroadcast",
+			address: NewAddress(BroadcastLocation, "manager", "root").Child("router", "root"),
+			want:    true,
+		},
+		{
+			name:    "multiNestedNonBroadcast",
+			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			want:    false,
+		},
+		{
+			name:    "multiNestedBroadcast",
+			address: NewAddress(BroadcastLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			want:    true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.address.IsBroadcast(); got != tt.want {
+				t.Errorf("IsBroadcast() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAddress_IsLocal(t *testing.T) {
+	tests := []struct {
+		name    string
+		address *Address
+		want    bool
+	}{
+		{
+			name:    "rootLocal",
+			address: NewAddress(LocalLocation, "manager", "root"),
+			want:    true,
+		},
+		{
+			name:    "rootNonLocal",
+			address: NewAddress(BroadcastLocation, "manager", "root"),
+			want:    false,
+		},
+		{
+			name:    "nestedLocal",
+			address: NewAddress(LocalLocation, "manager", "root").Child("router", "root"),
+			want:    true,
+		},
+		{
+			name:    "nestedNonLocal",
+			address: NewAddress(BroadcastLocation, "manager", "root").Child("router", "root"),
+			want:    false,
+		},
+		{
+			name:    "multiNestedLocal",
+			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			want:    true,
+		},
+		{
+			name:    "multiNestedNonLocal",
+			address: NewAddress(BroadcastLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			want:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.address.IsLocal(); got != tt.want {
+				t.Errorf("IsLocal() = %v, want %v", got, tt.want)
 			}
 		})
 	}
