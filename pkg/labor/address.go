@@ -15,12 +15,6 @@ type Addressable interface {
 	Address() *Address
 }
 
-type Location string
-
-func (l Location) String() string {
-	return string(l)
-}
-
 func NewAddress(location Location, kind Kind, id string) *Address {
 	return &Address{
 		location: location,
