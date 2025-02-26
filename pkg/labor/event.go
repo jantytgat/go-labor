@@ -10,6 +10,7 @@ type Event struct {
 	Category string
 	Type     string
 	Message  string
+	Info     any
 	// TODO Add trace id?
 }
 
@@ -19,6 +20,7 @@ func (e Event) LogValue(sender *Address) slog.Attr {
 		slog.String("sender", sender.String()),
 		slog.String("category", e.Category),
 		slog.String("type", e.Type),
+		slog.Any("info", e.Info),
 		// TODO Add trace id through a context?
 	)
 }

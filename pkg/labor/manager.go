@@ -13,8 +13,8 @@ const (
 )
 
 var (
-	managerStartedEvent = Event{laborEventCategory, managerKind.String(), "manager started"}
-	managerStoppedEvent = Event{laborEventCategory, managerKind.String(), "manager stopped"}
+	managerStartedEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager started"}
+	managerStoppedEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager stopped"}
 )
 
 type ManagerConfig struct {
@@ -118,6 +118,9 @@ func (m *Manager) AddJob(name string) error {
 				Category: "labor",
 				Type:     "job",
 				Message:  "job added",
+				Info: struct {
+					Name string
+				}{Name: name},
 			},
 		})
 		return nil
@@ -126,14 +129,9 @@ func (m *Manager) AddJob(name string) error {
 }
 
 func (m *Manager) checkPoison() {
-	defer func() {
-		m.ctxCancel = nil
-	}()
-
 	for {
 		select {
 		case <-m.ctx.Done():
-			fmt.Println("poisoned")
 			m.Stop()
 			return
 		}

@@ -8,8 +8,8 @@ const (
 )
 
 var (
-	operatorStartedEvent = Event{laborEventCategory, operatorKind.String(), "operator started"}
-	operatorStoppedEvent = Event{laborEventCategory, operatorKind.String(), "operator stopped"}
+	operatorStartedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator started"}
+	operatorStoppedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator stopped"}
 )
 
 type operatorConfig struct {

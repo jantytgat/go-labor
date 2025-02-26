@@ -8,8 +8,8 @@ const (
 )
 
 var (
-	schedulerStartedEvent = Event{laborEventCategory, schedulerKind.String(), "scheduler started"}
-	schedulerStoppedEvent = Event{laborEventCategory, schedulerKind.String(), "scheduler stopped"}
+	schedulerStartedEvent = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler started"}
+	schedulerStoppedEvent = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler stopped"}
 )
 
 type schedulerConfig struct {
