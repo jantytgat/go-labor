@@ -13,10 +13,10 @@ type Event struct {
 	// TODO Add trace id?
 }
 
-func (e Event) LogValue(sender string) slog.Attr {
+func (e Event) LogValue(sender *Address) slog.Attr {
 	return slog.Group(
 		"event",
-		slog.String("sender", sender),
+		slog.String("sender", sender.String()),
 		slog.String("category", e.Category),
 		slog.String("type", e.Type),
 		// TODO Add trace id through a context?

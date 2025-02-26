@@ -8,7 +8,7 @@ import (
 
 func TestEvent_LogValue(t *testing.T) {
 	type args struct {
-		sender string
+		sender *Address
 	}
 	tests := []struct {
 		name  string
@@ -19,9 +19,9 @@ func TestEvent_LogValue(t *testing.T) {
 		{
 			name:  "message",
 			event: Event{Message: "message"},
-			args:  args{"sender"},
+			args:  args{NewAddress(Location("local"), Kind("local"), "local")},
 			want: slog.Group("event",
-				slog.String("sender", "sender"),
+				slog.String("sender", "local/local/local"),
 				slog.String("category", ""),
 				slog.String("type", "")),
 		},
