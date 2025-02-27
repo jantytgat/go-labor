@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	mc := labor.ManagerConfig{
 		Address:         labor.NewAddress(labor.LocalAddress, "manager", "main"),
 		EnableScheduler: false,
@@ -26,38 +26,48 @@ func main() {
 	var count1 int
 	var count2 int
 	var count3 int
-	go func() {
+	sleep := false
+	go func(sleep bool) {
 		for j := 0; j < 10000000000; j++ {
 			if m.Enabled() {
 				count1++
 				_ = m.AddJob(fmt.Sprintf("job_%d", j))
+				if sleep {
+					time.Sleep(1 * time.Second)
+				}
 				continue
 			}
 			break
 		}
-	}()
+	}(sleep)
 
-	go func() {
+	go func(sleep bool) {
 		for j := 0; j < 10000000000; j++ {
 			if m.Enabled() {
 				count2++
 				_ = m.AddJob(fmt.Sprintf("job_%d", j))
+				if sleep {
+					time.Sleep(1 * time.Second)
+				}
 				continue
 			}
 			break
 		}
-	}()
+	}(sleep)
 
-	go func() {
+	go func(sleep bool) {
 		for j := 0; j < 10000000000; j++ {
 			if m.Enabled() {
 				count3++
 				_ = m.AddJob(fmt.Sprintf("job_%d", j))
+				if sleep {
+					time.Sleep(1 * time.Second)
+				}
 				continue
 			}
 			break
 		}
-	}()
+	}(sleep)
 	time.Sleep(21 * time.Second)
 	cancel()
 	fmt.Println("Processed jobs", count1+count2+count3, time.Since(startTime))

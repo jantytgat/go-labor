@@ -1,6 +1,8 @@
 package labor
 
-import "context"
+import (
+	"context"
+)
 
 const (
 	schedulerKind Kind   = "scheduler"
@@ -36,19 +38,37 @@ func (s *scheduler) Address() *Address {
 	return s.config.Address
 }
 
+func (s *scheduler) Receive(e Envelope) {
+	if event, ok := e.Message.(Event); ok {
+		msg := Event{
+			Category: "labor",
+			Type:     "scheduler",
+			Message:  "received job",
+			Info:     event.Info,
+		}
+		s.config.Router.Send(Envelope{
+			ctx:      nil,
+			Sender:   e.Receiver,
+			Receiver: nil,
+			Message:  msg,
+		})
+	}
+
+}
+
 func (s *scheduler) Start(ctx context.Context) {
 	s.ctx, s.ctxCancel = context.WithCancel(ctx)
 
-	defer s.config.Router.Process(Envelope{
-		Sender:  s.Address(),
+	defer s.config.Router.Send(Envelope{
+		Sender:  s,
 		Message: schedulerStartedEvent,
 	})
 }
 
 func (s *scheduler) Stop() {
 	if s.ctxCancel != nil {
-		defer s.config.Router.Process(Envelope{
-			Sender:  s.Address(),
+		defer s.config.Router.Send(Envelope{
+			Sender:  s,
 			Message: schedulerStoppedEvent,
 		})
 

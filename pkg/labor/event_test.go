@@ -23,7 +23,8 @@ func TestEvent_LogValue(t *testing.T) {
 			want: slog.Group("event",
 				slog.String("sender", "local/local/local"),
 				slog.String("category", ""),
-				slog.String("type", "")),
+				slog.String("type", ""),
+				slog.Any("info", nil)),
 		},
 	}
 	for _, tt := range tests {

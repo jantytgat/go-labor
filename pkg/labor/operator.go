@@ -1,6 +1,9 @@
 package labor
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 const (
 	operatorKind Kind = "operator"
@@ -33,19 +36,23 @@ func (o *operator) Address() *Address {
 	return o.config.Address
 }
 
+func (o *operator) Receive(e Envelope) {
+	fmt.Println("Received envelope:", e)
+}
+
 func (o *operator) Start(ctx context.Context) {
 	o.ctx, o.ctxCancel = context.WithCancel(ctx)
 
-	defer o.config.Router.Process(Envelope{
-		Sender:  o.Address(),
+	defer o.config.Router.Send(Envelope{
+		Sender:  o,
 		Message: operatorStartedEvent,
 	})
 }
 
 func (o *operator) Stop() {
 	if o.ctxCancel != nil {
-		defer o.config.Router.Process(Envelope{
-			Sender:  o.Address(),
+		defer o.config.Router.Send(Envelope{
+			Sender:  o,
 			Message: operatorStoppedEvent,
 		})
 

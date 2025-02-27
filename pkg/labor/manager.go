@@ -13,8 +13,9 @@ const (
 )
 
 var (
-	managerStartedEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager started"}
-	managerStoppedEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager stopped"}
+	managerStartedEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager started"}
+	managerStoppedEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager stopped"}
+	managerReceivedMessageEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received message"}
 )
 
 type ManagerConfig struct {
@@ -75,10 +76,17 @@ func (m *Manager) Enabled() bool {
 	return m.enabled
 }
 
+func (m *Manager) Receive(e Envelope) {
+	m.router.Send(Envelope{
+		Sender:  m,
+		Message: managerReceivedMessageEvent,
+	})
+}
+
 func (m *Manager) Start(ctx context.Context) {
 	defer func() {
-		m.router.Process(Envelope{
-			Sender:  m.Address(),
+		m.router.Send(Envelope{
+			Sender:  m,
 			Message: managerStartedEvent,
 		})
 		m.enable()
@@ -86,7 +94,7 @@ func (m *Manager) Start(ctx context.Context) {
 
 	m.ctx, m.ctxCancel = context.WithCancel(ctx)
 
-	m.router.Enable()
+	m.router.enable()
 	if m.config.EnableScheduler {
 		m.scheduler.Start(m.ctx)
 	}
@@ -99,21 +107,22 @@ func (m *Manager) Start(ctx context.Context) {
 }
 
 func (m *Manager) Stop() {
-	defer m.router.Process(Envelope{
-		Sender:  m.Address(),
+	defer m.router.Send(Envelope{
+		Sender:  m,
 		Message: managerStoppedEvent,
 	})
 	m.disable()
 	m.scheduler.Stop()
 	m.operator.Stop()
-	m.router.Disable()
+	m.router.disable()
 	m.ctxCancel()
 }
 
 func (m *Manager) AddJob(name string) error {
 	if m.Enabled() {
-		defer m.router.Process(Envelope{
-			Sender: m.Address(),
+		defer m.router.Send(Envelope{
+			Sender:   m,
+			Receiver: m.scheduler,
 			Message: Event{
 				Category: "labor",
 				Type:     "job",

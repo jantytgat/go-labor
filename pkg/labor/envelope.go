@@ -4,7 +4,7 @@ import "context"
 
 type Envelope struct {
 	ctx      context.Context
-	Sender   *Address
-	Receiver *Address
+	Sender   Addressable
+	Receiver Addressable
 	Message  any
 }
