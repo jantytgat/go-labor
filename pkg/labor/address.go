@@ -17,6 +17,7 @@ const (
 
 type Addressable interface {
 	Address() *Address
+	Receive(Envelope)
 }
 
 func NewAddress(location Location, kind Kind, id string) *Address {
