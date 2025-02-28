@@ -16,6 +16,8 @@ func main() {
 		EnableScheduler: false,
 		EnableOperator:  false,
 		EventLogger:     logger,
+		EventLogLevel:   slog.LevelDebug,
+		MaxOperators:    5000,
 	}
 
 	startTime := time.Now()
@@ -23,53 +25,39 @@ func main() {
 	m := labor.NewManager(mc)
 	m.Start(ctx)
 
-	var count1 int
-	var count2 int
-	var count3 int
+	c := labor.NewCustomer("main")
+
 	sleep := false
+	var requestCounter int
 	go func(sleep bool) {
 		for j := 0; j < 10000000000; j++ {
-			if m.Enabled() {
-				count1++
-				_ = m.AddJob(fmt.Sprintf("job_%d", j))
-				if sleep {
-					time.Sleep(1 * time.Second)
-				}
-				continue
+			if err := c.Send(
+				ctx,
+				labor.Request{
+					Name: fmt.Sprintf("job_%d", j),
+					Data: nil,
+				},
+				m); err != nil {
+				break
 			}
-			break
+			requestCounter++
 		}
 	}(sleep)
 
-	go func(sleep bool) {
-		for j := 0; j < 10000000000; j++ {
-			if m.Enabled() {
-				count2++
-				_ = m.AddJob(fmt.Sprintf("job_%d", j))
-				if sleep {
-					time.Sleep(1 * time.Second)
-				}
-				continue
+	var responseCounter int
+	go func(ctx context.Context, c *labor.Customer) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				fmt.Println(c.Receive(ctx))
+				responseCounter++
 			}
-			break
 		}
-	}(sleep)
-
-	go func(sleep bool) {
-		for j := 0; j < 10000000000; j++ {
-			if m.Enabled() {
-				count3++
-				_ = m.AddJob(fmt.Sprintf("job_%d", j))
-				if sleep {
-					time.Sleep(1 * time.Second)
-				}
-				continue
-			}
-			break
-		}
-	}(sleep)
+	}(ctx, c)
 	time.Sleep(21 * time.Second)
 	cancel()
-	fmt.Println("Processed jobs", count1+count2+count3, time.Since(startTime))
+	fmt.Printf("Processed jobs %d/%d in %s", responseCounter, requestCounter, time.Since(startTime))
 
 }
