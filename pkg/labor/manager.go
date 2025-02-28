@@ -24,6 +24,7 @@ type ManagerConfig struct {
 	EnableOperator  bool
 	EventLogger     *slog.Logger
 	EventLogLevel   slog.Level
+	MaxOperators    int
 }
 
 func NewManager(config ManagerConfig) *Manager {
@@ -37,20 +38,30 @@ func NewManager(config ManagerConfig) *Manager {
 	}
 	r := newRouter(rConfig)
 
+	chAvailableOperator := make(chan Addressable, config.MaxOperators)
+
 	sConfig := schedulerConfig{
-		Router:  r,
-		Address: config.Address.Child(schedulerKind, schedulerId),
+		Router:            r,
+		Address:           config.Address.Child(schedulerKind, schedulerId),
+		AvailableOperator: chAvailableOperator,
+		Enabled:           config.EnableScheduler,
 	}
 
-	oConfig := operatorConfig{
-		Router:  r,
-		Address: config.Address.Child(operatorKind, operatorId),
+	operators := make([]*operator, config.MaxOperators)
+	for i := 0; i < config.MaxOperators; i++ {
+		oConfig := operatorConfig{
+			Router:            r,
+			Address:           config.Address.Child(operatorKind, fmt.Sprintf("operator_%d", i)),
+			AvailableOperator: chAvailableOperator,
+			Enabled:           config.EnableOperator,
+		}
+		operators[i] = newOperator(oConfig)
 	}
 
 	return &Manager{
 		config:    config,
 		scheduler: newScheduler(sConfig),
-		operator:  newOperator(oConfig),
+		operator:  operators,
 		router:    r,
 	}
 }
@@ -61,7 +72,7 @@ type Manager struct {
 	config    ManagerConfig
 	enabled   bool
 	scheduler *scheduler
-	operator  *operator
+	operator  []*operator
 	router    *router
 	mux       sync.RWMutex
 }
@@ -95,13 +106,9 @@ func (m *Manager) Start(ctx context.Context) {
 	m.ctx, m.ctxCancel = context.WithCancel(ctx)
 
 	m.router.enable()
-	if m.config.EnableScheduler {
-		m.scheduler.Start(m.ctx)
-	}
-
-	if m.config.EnableOperator {
-		m.operator.Start(m.ctx)
-	}
+	//if m.config.EnableScheduler {
+	//	m.scheduler.Start(m.ctx)
+	//}
 
 	go m.checkPoison()
 }
@@ -112,29 +119,9 @@ func (m *Manager) Stop() {
 		Message: managerStoppedEvent,
 	})
 	m.disable()
-	m.scheduler.Stop()
-	m.operator.Stop()
+	//m.scheduler.Stop()
 	m.router.disable()
 	m.ctxCancel()
-}
-
-func (m *Manager) AddJob(name string) error {
-	if m.Enabled() {
-		defer m.router.Send(Envelope{
-			Sender:   m,
-			Receiver: m.scheduler,
-			Message: Event{
-				Category: "labor",
-				Type:     "job",
-				Message:  "job added",
-				Info: struct {
-					Name string
-				}{Name: name},
-			},
-		})
-		return nil
-	}
-	return fmt.Errorf("manager is stopped")
 }
 
 func (m *Manager) checkPoison() {

@@ -76,7 +76,7 @@ func (r *router) Send(e Envelope) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 	if r.enabled {
-		r.send(e)
+		go r.send(e)
 	}
 }
 

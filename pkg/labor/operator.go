@@ -11,19 +11,23 @@ const (
 )
 
 var (
-	operatorStartedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator started"}
-	operatorStoppedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator stopped"}
+// operatorStartedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator started"}
+// operatorStoppedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator stopped"}
 )
 
 type operatorConfig struct {
-	Address *Address
-	Router  *router
+	Address           *Address
+	Router            *router
+	AvailableOperator chan Addressable
+	Enabled           bool
 }
 
 func newOperator(config operatorConfig) *operator {
-	return &operator{
+	o := &operator{
 		config: config,
 	}
+	config.AvailableOperator <- o
+	return o
 }
 
 type operator struct {
@@ -37,25 +41,58 @@ func (o *operator) Address() *Address {
 }
 
 func (o *operator) Receive(e Envelope) {
-	fmt.Println("Received envelope:", e)
-}
+	switch e.Message.(type) {
+	case Request:
+		if request, ok := e.Message.(Request); ok {
+			msg := Event{
+				Category: laborEventCategory,
+				Type:     operatorKind.String(),
+				Message:  "received job",
+				Info:     request.Name,
+			}
+			o.config.Router.Send(Envelope{
+				ctx:      e.ctx,
+				Sender:   o,
+				Receiver: nil,
+				Message:  msg,
+			})
 
-func (o *operator) Start(ctx context.Context) {
-	o.ctx, o.ctxCancel = context.WithCancel(ctx)
-
-	defer o.config.Router.Send(Envelope{
-		Sender:  o,
-		Message: operatorStartedEvent,
-	})
-}
-
-func (o *operator) Stop() {
-	if o.ctxCancel != nil {
-		defer o.config.Router.Send(Envelope{
-			Sender:  o,
-			Message: operatorStoppedEvent,
+			o.config.Router.Send(Envelope{
+				ctx:      e.ctx,
+				Sender:   o,
+				Receiver: e.Sender,
+				Message:  fmt.Sprintf("completed job: %s by %s", request.Name, o.Address().String()),
+			})
+		}
+	default:
+		o.config.Router.Send(Envelope{
+			ctx:      e.ctx,
+			Sender:   o,
+			Receiver: nil,
+			Message:  schedulerUnsupportedMessageEvent,
 		})
-
-		o.ctxCancel()
 	}
+
+	o.config.AvailableOperator <- o
 }
+
+//
+//func (o *operator) Start(ctx context.Context) {
+//	o.ctx, o.ctxCancel = context.WithCancel(ctx)
+//
+//	defer o.config.Router.Send(Envelope{
+//		Sender:  o,
+//		Message: operatorStartedEvent,
+//	})
+//}
+//
+//func (o *operator) Stop() {
+//	if o.ctxCancel != nil {
+//		defer o.config.Router.Send(Envelope{
+//			Sender:  o,
+//			Message: operatorStoppedEvent,
+//		})
+//
+//		o.ctxCancel()
+//	}
+//}

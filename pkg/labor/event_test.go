@@ -47,16 +47,6 @@ func TestEvent_String(t *testing.T) {
 			event: Event{Message: "message"},
 			want:  "message",
 		},
-		{
-			name:  "operator",
-			event: operatorStartedEvent,
-			want:  "operator started",
-		},
-		{
-			name:  "scheduler",
-			event: schedulerStartedEvent,
-			want:  "scheduler started",
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
