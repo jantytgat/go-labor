@@ -57,7 +57,11 @@ func (r *router) enable() {
 }
 
 func (r *router) forward(e Envelope) {
-	e.Receiver.Receive(e)
+	r.mux.RLock()
+	defer r.mux.RUnlock()
+	if r.enabled {
+		e.Receiver.Receive(e)
+	}
 }
 
 func (r *router) logEvent(ctx context.Context, sender Addressable, event Event) {
@@ -73,11 +77,7 @@ func (r *router) Send(e Envelope) {
 		r.logEvent(e.ctx, e.Sender, event)
 	}
 
-	r.mux.RLock()
-	defer r.mux.RUnlock()
-	if r.enabled {
-		go r.send(e)
-	}
+	r.send(e)
 }
 
 func (r *router) Register(a Addressable) {

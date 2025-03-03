@@ -11,8 +11,8 @@ const (
 )
 
 var (
-// operatorStartedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator started"}
-// operatorStoppedEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator stopped"}
+	operatorAvailableEvent   = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator available"}
+	operatorReceivedJobEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator received job"}
 )
 
 type operatorConfig struct {
@@ -26,6 +26,14 @@ func newOperator(config operatorConfig) *operator {
 	o := &operator{
 		config: config,
 	}
+	o.config.Router.Register(o)
+
+	o.config.Router.Send(Envelope{
+		ctx:      context.TODO(),
+		Sender:   o,
+		Receiver: nil,
+		Message:  operatorAvailableEvent.WithInfo(o.Address().id),
+	})
 	config.AvailableOperator <- o
 	return o
 }
@@ -44,19 +52,15 @@ func (o *operator) Receive(e Envelope) {
 	switch e.Message.(type) {
 	case Request:
 		if request, ok := e.Message.(Request); ok {
-			msg := Event{
-				Category: laborEventCategory,
-				Type:     operatorKind.String(),
-				Message:  "received job",
-				Info:     request.Name,
-			}
+			// Event: operator received job
 			o.config.Router.Send(Envelope{
 				ctx:      e.ctx,
 				Sender:   o,
 				Receiver: nil,
-				Message:  msg,
+				Message:  operatorReceivedJobEvent.WithInfo(request.Name),
 			})
 
+			// Send result back to the customer
 			o.config.Router.Send(Envelope{
 				ctx:      e.ctx,
 				Sender:   o,
@@ -74,19 +78,25 @@ func (o *operator) Receive(e Envelope) {
 	}
 
 	o.config.AvailableOperator <- o
+	o.config.Router.Send(Envelope{
+		ctx:      e.ctx,
+		Sender:   o,
+		Receiver: nil,
+		Message:  operatorAvailableEvent.WithInfo(o.Address().id),
+	})
 }
 
 //
-//func (o *operator) Start(ctx context.Context) {
+// func (o *operator) Start(ctx context.Context) {
 //	o.ctx, o.ctxCancel = context.WithCancel(ctx)
 //
 //	defer o.config.Router.Send(Envelope{
 //		Sender:  o,
 //		Message: operatorStartedEvent,
 //	})
-//}
+// }
 //
-//func (o *operator) Stop() {
+// func (o *operator) Stop() {
 //	if o.ctxCancel != nil {
 //		defer o.config.Router.Send(Envelope{
 //			Sender:  o,
@@ -95,4 +105,4 @@ func (o *operator) Receive(e Envelope) {
 //
 //		o.ctxCancel()
 //	}
-//}
+// }

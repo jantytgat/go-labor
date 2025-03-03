@@ -10,9 +10,10 @@ const (
 )
 
 var (
-	//schedulerStartedEvent            = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler started"}
-	//schedulerStoppedEvent            = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler stopped"}
+	// schedulerStartedEvent            = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler started"}
+	// schedulerStoppedEvent            = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler stopped"}
 	schedulerUnsupportedMessageEvent = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "unsupported message"}
+	schedulerReceivedJobEvent        = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler received job"}
 )
 
 type schedulerConfig struct {
@@ -44,17 +45,11 @@ func (s *scheduler) Receive(e Envelope) {
 	switch e.Message.(type) {
 	case Request:
 		if request, ok := e.Message.(Request); ok {
-			msg := Event{
-				Category: laborEventCategory,
-				Type:     schedulerKind.String(),
-				Message:  "received job",
-				Info:     request.Name,
-			}
 			s.config.Router.Send(Envelope{
 				ctx:      e.ctx,
 				Sender:   s,
 				Receiver: nil,
-				Message:  msg,
+				Message:  schedulerReceivedJobEvent.WithInfo(request.Name),
 			})
 
 			availableOperator := <-s.config.AvailableOperator
@@ -77,16 +72,16 @@ func (s *scheduler) Receive(e Envelope) {
 }
 
 //
-//func (s *scheduler) Start(ctx context.Context) {
+// func (s *scheduler) Start(ctx context.Context) {
 //	s.ctx, s.ctxCancel = context.WithCancel(ctx)
 //
 //	defer s.config.Router.Send(Envelope{
 //		Sender:  s,
 //		Message: schedulerStartedEvent,
 //	})
-//}
+// }
 //
-//func (s *scheduler) Stop() {
+// func (s *scheduler) Stop() {
 //	if s.ctxCancel != nil {
 //		defer s.config.Router.Send(Envelope{
 //			Sender:  s,
@@ -95,4 +90,4 @@ func (s *scheduler) Receive(e Envelope) {
 //
 //		s.ctxCancel()
 //	}
-//}
+// }

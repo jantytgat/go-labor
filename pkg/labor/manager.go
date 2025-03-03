@@ -27,42 +27,44 @@ type ManagerConfig struct {
 	MaxOperators    int
 }
 
-func NewManager(config ManagerConfig) *Manager {
+func NewManager(c ManagerConfig) *Manager {
 	rConfig := routerConfig{
-		address: config.Address.Child(routerKind, routerId),
-		EventLogger: config.EventLogger.With(
+		address: c.Address.Child(routerKind, routerId),
+		EventLogger: c.EventLogger.With(
 			slog.Group(
 				"manager",
-				slog.Any("address", config.Address.LogValue()))),
-		EventLogLevel: config.EventLogLevel,
+				slog.Any("address", c.Address.LogValue()))),
+		EventLogLevel: c.EventLogLevel,
 	}
 	r := newRouter(rConfig)
 
-	chAvailableOperator := make(chan Addressable, config.MaxOperators)
+	chAvailableOperator := make(chan Addressable, c.MaxOperators)
 
 	sConfig := schedulerConfig{
 		Router:            r,
-		Address:           config.Address.Child(schedulerKind, schedulerId),
+		Address:           c.Address.Child(schedulerKind, schedulerId),
 		AvailableOperator: chAvailableOperator,
-		Enabled:           config.EnableScheduler,
+		Enabled:           c.EnableScheduler,
 	}
+	s := newScheduler(sConfig)
 
-	operators := make([]*operator, config.MaxOperators)
-	for i := 0; i < config.MaxOperators; i++ {
+	o := make([]*operator, c.MaxOperators)
+	for i := 0; i < c.MaxOperators; i++ {
 		oConfig := operatorConfig{
 			Router:            r,
-			Address:           config.Address.Child(operatorKind, fmt.Sprintf("operator_%d", i)),
+			Address:           c.Address.Child(operatorKind, fmt.Sprintf("operator_%d", i+1)),
 			AvailableOperator: chAvailableOperator,
-			Enabled:           config.EnableOperator,
+			Enabled:           c.EnableOperator,
 		}
-		operators[i] = newOperator(oConfig)
+		o[i] = newOperator(oConfig)
 	}
 
 	return &Manager{
-		config:    config,
-		scheduler: newScheduler(sConfig),
-		operator:  operators,
+		config:    c,
+		scheduler: s,
+		operator:  o,
 		router:    r,
+		enabled:   false,
 	}
 }
 
@@ -81,67 +83,49 @@ func (m *Manager) Address() *Address {
 	return m.config.Address
 }
 
-func (m *Manager) Enabled() bool {
+func (m *Manager) IsEnabled() bool {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
-	return m.enabled
+	return m.router.enabled
 }
 
 func (m *Manager) Receive(e Envelope) {
 	m.router.Send(Envelope{
 		Sender:  m,
-		Message: managerReceivedMessageEvent,
+		Message: managerReceivedMessageEvent.WithInfo(m.Address().id),
 	})
 }
 
 func (m *Manager) Start(ctx context.Context) {
-	defer func() {
-		m.router.Send(Envelope{
-			Sender:  m,
-			Message: managerStartedEvent,
-		})
-		m.enable()
-	}()
+	var ctxPoison context.Context
+	ctxPoison, m.ctxCancel = context.WithCancel(ctx)
+	go m.checkPoison(ctxPoison)
 
-	m.ctx, m.ctxCancel = context.WithCancel(ctx)
-
+	// Activate the router to accept messages
 	m.router.enable()
-	//if m.config.EnableScheduler {
-	//	m.scheduler.Start(m.ctx)
-	//}
 
-	go m.checkPoison()
+	m.router.Send(Envelope{
+		Sender:  m,
+		Message: managerStartedEvent.WithInfo(m.Address().id),
+	})
 }
 
 func (m *Manager) Stop() {
-	defer m.router.Send(Envelope{
-		Sender:  m,
-		Message: managerStoppedEvent,
-	})
-	m.disable()
-	//m.scheduler.Stop()
-	m.router.disable()
+	// Stop the router
+	m.router.disable() // TODO set timeout
 	m.ctxCancel()
+	m.router.Send(Envelope{
+		Sender:  m,
+		Message: managerStoppedEvent.WithInfo(m.Address().id),
+	})
 }
 
-func (m *Manager) checkPoison() {
+func (m *Manager) checkPoison(ctx context.Context) {
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-ctx.Done():
 			m.Stop()
 			return
 		}
 	}
-}
-
-func (m *Manager) disable() {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-	m.enabled = false
-}
-
-func (m *Manager) enable() {
-	m.mux.Lock()
-	defer m.mux.Unlock()
-	m.enabled = true
 }
