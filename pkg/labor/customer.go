@@ -11,15 +11,19 @@ const (
 
 func NewCustomer(name string) *Customer {
 	return &Customer{
+		Name: name,
 		res: &responseHandler{
 			address: NewAddress(LocalLocation, customerKind, name),
-			output:  make(chan Envelope),
+			output:  make(chan envelope),
 		},
 	}
 }
 
 type Customer struct {
-	res *responseHandler
+	Name      string
+	Requests  int
+	Responses int
+	res       *responseHandler
 }
 
 func (c *Customer) Send(ctx context.Context, job Request, m *Manager) error {
@@ -31,12 +35,13 @@ func (c *Customer) Send(ctx context.Context, job Request, m *Manager) error {
 		return fmt.Errorf("manager is not accepting new messages")
 	}
 
-	m.router.Send(Envelope{
+	m.router.Send(envelope{
 		ctx:      ctx,
 		Sender:   c.res,
 		Receiver: m.scheduler,
 		Message:  job,
 	})
+	c.Requests++
 	return nil
 }
 
@@ -45,19 +50,20 @@ func (c *Customer) Receive(ctx context.Context) any {
 	case <-ctx.Done():
 		return nil
 	case e := <-c.res.output:
+		c.Responses++
 		return e.Message
 	}
 }
 
 type responseHandler struct {
 	address *Address
-	output  chan Envelope
+	output  chan envelope
 }
 
 func (r *responseHandler) Address() *Address {
 	return r.address
 }
 
-func (r *responseHandler) Receive(e Envelope) {
+func (r *responseHandler) Receive(e envelope) {
 	r.output <- e
 }
