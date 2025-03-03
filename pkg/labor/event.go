@@ -13,17 +13,15 @@ type Event struct {
 	Type     string
 	Message  string
 	Info     any
-	// TODO Add trace id?
 }
 
 func (e Event) LogValue(sender *Address) slog.Attr {
 	return slog.Group(
 		"event",
-		slog.String("sender", sender.String()),
+		slog.String("source", sender.String()),
 		slog.String("category", e.Category),
 		slog.String("type", e.Type),
 		slog.Any("info", e.Info),
-		// TODO Add trace id through a context?
 	)
 }
 
