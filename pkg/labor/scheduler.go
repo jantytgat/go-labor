@@ -2,6 +2,7 @@ package labor
 
 import (
 	"context"
+	"log/slog"
 )
 
 const (
@@ -10,8 +11,6 @@ const (
 )
 
 var (
-	// schedulerStartedEvent            = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler started"}
-	// schedulerStoppedEvent            = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler stopped"}
 	schedulerUnsupportedMessageEvent = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "unsupported message"}
 	schedulerReceivedJobEvent        = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler received job"}
 )
@@ -20,7 +19,8 @@ type schedulerConfig struct {
 	Address           *Address
 	Router            *router
 	AvailableOperator chan Addressable
-	Enabled           bool
+	EventLogger       *slog.Logger
+	EventLogLevel     slog.Level
 }
 
 func newScheduler(config schedulerConfig) *scheduler {
@@ -41,20 +41,15 @@ func (s *scheduler) Address() *Address {
 	return s.config.Address
 }
 
-func (s *scheduler) Receive(e Envelope) {
+func (s *scheduler) Receive(e envelope) {
 	switch e.Message.(type) {
 	case Request:
 		if request, ok := e.Message.(Request); ok {
-			s.config.Router.Send(Envelope{
-				ctx:      e.ctx,
-				Sender:   s,
-				Receiver: nil,
-				Message:  schedulerReceivedJobEvent.WithInfo(request.Name),
-			})
+			s.logEvent(e.ctx, s, schedulerReceivedJobEvent.WithInfo(request.Name))
 
 			availableOperator := <-s.config.AvailableOperator
 
-			s.config.Router.Send(Envelope{
+			s.config.Router.Send(envelope{
 				ctx:      e.ctx,
 				Sender:   e.Sender,
 				Receiver: availableOperator,
@@ -62,32 +57,14 @@ func (s *scheduler) Receive(e Envelope) {
 			})
 		}
 	default:
-		s.config.Router.Send(Envelope{
-			ctx:      e.ctx,
-			Sender:   s,
-			Receiver: nil,
-			Message:  schedulerUnsupportedMessageEvent,
-		})
+		s.logEvent(e.ctx, s, schedulerUnsupportedMessageEvent)
 	}
 }
 
-//
-// func (s *scheduler) Start(ctx context.Context) {
-//	s.ctx, s.ctxCancel = context.WithCancel(ctx)
-//
-//	defer s.config.Router.Send(Envelope{
-//		Sender:  s,
-//		Message: schedulerStartedEvent,
-//	})
-// }
-//
-// func (s *scheduler) Stop() {
-//	if s.ctxCancel != nil {
-//		defer s.config.Router.Send(Envelope{
-//			Sender:  s,
-//			Message: schedulerStoppedEvent,
-//		})
-//
-//		s.ctxCancel()
-//	}
-// }
+func (s *scheduler) logEvent(ctx context.Context, sender Addressable, event Event) {
+	s.config.EventLogger.LogAttrs(
+		ctx,
+		s.config.EventLogLevel,
+		event.String(),
+		event.LogValue(sender.Address()))
+}

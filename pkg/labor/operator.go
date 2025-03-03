@@ -3,11 +3,11 @@ package labor
 import (
 	"context"
 	"fmt"
+	"log/slog"
 )
 
 const (
 	operatorKind Kind = "operator"
-	operatorId        = "root"
 )
 
 var (
@@ -19,7 +19,8 @@ type operatorConfig struct {
 	Address           *Address
 	Router            *router
 	AvailableOperator chan Addressable
-	Enabled           bool
+	EventLogger       *slog.Logger
+	EventLogLevel     slog.Level
 }
 
 func newOperator(config operatorConfig) *operator {
@@ -27,13 +28,7 @@ func newOperator(config operatorConfig) *operator {
 		config: config,
 	}
 	o.config.Router.Register(o)
-
-	o.config.Router.Send(Envelope{
-		ctx:      context.TODO(),
-		Sender:   o,
-		Receiver: nil,
-		Message:  operatorAvailableEvent.WithInfo(o.Address().id),
-	})
+	o.logEvent(context.TODO(), o, operatorAvailableEvent.WithInfo(o.Address().id))
 	config.AvailableOperator <- o
 	return o
 }
@@ -48,20 +43,16 @@ func (o *operator) Address() *Address {
 	return o.config.Address
 }
 
-func (o *operator) Receive(e Envelope) {
+func (o *operator) Receive(e envelope) {
 	switch e.Message.(type) {
 	case Request:
 		if request, ok := e.Message.(Request); ok {
-			// Event: operator received job
-			o.config.Router.Send(Envelope{
-				ctx:      e.ctx,
-				Sender:   o,
-				Receiver: nil,
-				Message:  operatorReceivedJobEvent.WithInfo(request.Name),
-			})
+			o.logEvent(e.ctx, o, operatorReceivedJobEvent.WithInfo(request.Name))
+
+			// Execute job
 
 			// Send result back to the customer
-			o.config.Router.Send(Envelope{
+			o.config.Router.Send(envelope{
 				ctx:      e.ctx,
 				Sender:   o,
 				Receiver: e.Sender,
@@ -69,40 +60,16 @@ func (o *operator) Receive(e Envelope) {
 			})
 		}
 	default:
-		o.config.Router.Send(Envelope{
-			ctx:      e.ctx,
-			Sender:   o,
-			Receiver: nil,
-			Message:  schedulerUnsupportedMessageEvent,
-		})
+		o.logEvent(e.ctx, o, schedulerUnsupportedMessageEvent)
 	}
-
+	o.logEvent(e.ctx, o, operatorAvailableEvent.WithInfo(o.Address().id))
 	o.config.AvailableOperator <- o
-	o.config.Router.Send(Envelope{
-		ctx:      e.ctx,
-		Sender:   o,
-		Receiver: nil,
-		Message:  operatorAvailableEvent.WithInfo(o.Address().id),
-	})
 }
 
-//
-// func (o *operator) Start(ctx context.Context) {
-//	o.ctx, o.ctxCancel = context.WithCancel(ctx)
-//
-//	defer o.config.Router.Send(Envelope{
-//		Sender:  o,
-//		Message: operatorStartedEvent,
-//	})
-// }
-//
-// func (o *operator) Stop() {
-//	if o.ctxCancel != nil {
-//		defer o.config.Router.Send(Envelope{
-//			Sender:  o,
-//			Message: operatorStoppedEvent,
-//		})
-//
-//		o.ctxCancel()
-//	}
-// }
+func (o *operator) logEvent(ctx context.Context, sender Addressable, event Event) {
+	o.config.EventLogger.LogAttrs(
+		ctx,
+		o.config.EventLogLevel,
+		event.String(),
+		event.LogValue(sender.Address()))
+}

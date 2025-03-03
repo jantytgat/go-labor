@@ -13,9 +13,8 @@ const (
 )
 
 var (
-	managerStartedEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager started"}
-	managerStoppedEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager stopped"}
-	managerReceivedMessageEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received message"}
+	managerStartedEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager started"}
+	managerStoppedEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager stopped"}
 )
 
 type ManagerConfig struct {
