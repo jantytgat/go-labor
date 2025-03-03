@@ -1,6 +1,8 @@
 package labor
 
-import "log/slog"
+import (
+	"log/slog"
+)
 
 const (
 	laborEventCategory = "labor"
@@ -27,4 +29,9 @@ func (e Event) LogValue(sender *Address) slog.Attr {
 
 func (e Event) String() string {
 	return e.Message
+}
+
+func (e Event) WithInfo(info any) Event {
+	e.Info = info
+	return e
 }
