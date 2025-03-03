@@ -27,6 +27,10 @@ func (c *Customer) Send(ctx context.Context, job Request, m *Manager) error {
 		return fmt.Errorf("customer not properly initialized")
 	}
 
+	if !m.IsEnabled() {
+		return fmt.Errorf("manager is not accepting new messages")
+	}
+
 	m.router.Send(Envelope{
 		ctx:      ctx,
 		Sender:   c.res,
