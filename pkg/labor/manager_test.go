@@ -20,7 +20,7 @@ func benchmarkManager_AddJob(b *testing.B) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	m := NewManager(mc)
-	m.Start(ctx)
+	m.Enable(ctx)
 
 	var count int
 	for n := 0; n < b.N; n++ {
