@@ -6,18 +6,16 @@ import (
 )
 
 const (
-	addressSeparator = "/"
-
-	LocalAddress     = "local"
-	BroadcastAddress = "broadcast"
-
-	BroadcastLocation Location = Location(BroadcastAddress)
+	addressSeparator           = "/"
+	LocalAddress               = "local"
 	LocalLocation              = Location(LocalAddress)
+	BroadcastAddress           = "broadcast"
+	BroadcastLocation Location = Location(BroadcastAddress)
 )
 
 type Addressable interface {
 	Address() *Address
-	Receive(Envelope)
+	Receive(envelope)
 }
 
 func NewAddress(location Location, kind Kind, id string) *Address {
