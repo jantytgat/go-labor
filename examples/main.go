@@ -12,12 +12,12 @@ import (
 )
 
 var (
-	logLevel         = slog.LevelInfo
-	runTime      int = 1
+	logLevel         = slog.LevelWarn
+	runTime      int = 10
 	managerName      = "example"
-	maxJobs      int = 10000
-	maxCustomers     = 12
-	maxOperators int = runtime.NumCPU() * maxCustomers
+	maxJobs      int = 1000000
+	maxCustomers     = 20
+	maxOperators int = runtime.NumCPU() * maxCustomers * 2
 )
 
 func main() {
@@ -50,8 +50,8 @@ func main() {
 						Data: nil,
 					},
 					m); err != nil {
-					fmt.Println(err)
-					break
+					//fmt.Println(err)
+					return
 				}
 			}
 		}(ctx, customer, i)
