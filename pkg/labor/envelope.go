@@ -2,7 +2,7 @@ package labor
 
 import "context"
 
-type Envelope struct {
+type envelope struct {
 	ctx      context.Context
 	Sender   Addressable
 	Receiver Addressable
