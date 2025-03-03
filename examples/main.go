@@ -12,56 +12,49 @@ import (
 )
 
 var (
-	logLevel         = slog.LevelDebug
+	logLevel         = slog.LevelInfo
 	runTime      int = 1
-	maxJobs      int = 100
-	maxCustomers     = 1
-	maxOperators int = runtime.NumCPU()
-	sleep            = false
+	managerName      = "example"
+	maxJobs      int = 10000
+	maxCustomers     = 12
+	maxOperators int = runtime.NumCPU() * maxCustomers
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	mc := labor.ManagerConfig{
-		Address:         labor.NewAddress(labor.LocalAddress, "manager", "main"),
-		EnableScheduler: false,
-		EnableOperator:  false,
-		EventLogger:     logger,
-		EventLogLevel:   slog.LevelDebug,
-		MaxOperators:    maxOperators,
+		Address:                labor.NewAddress(labor.LocalAddress, "manager", managerName),
+		ManagerEventLogLevel:   slog.LevelInfo,
+		RouterEventLogLevel:    slog.LevelDebug,
+		SchedulerEventLogLevel: slog.LevelDebug,
+		OperatorEventLogLevel:  slog.LevelDebug,
+		MaxOperators:           maxOperators,
 	}
 
-	startTime := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(runTime)*time.Second)
-	m := labor.NewManager(mc)
-	m.Start(ctx)
+	m := labor.NewManager(ctx, mc, logger)
+	m.Enable(ctx)
 
 	var customers = make([]*labor.Customer, maxCustomers)
-	var requestCounters = make([]int, maxCustomers)
-	var responseCounters = make([]int, maxCustomers)
 
 	for i := 0; i < maxCustomers; i++ {
 		customer := labor.NewCustomer(fmt.Sprintf("customer_%d", i+1))
 		customers[i] = customer
 
-		go func(c *labor.Customer, id int) {
+		go func(ctx context.Context, c *labor.Customer, id int) {
 			for j := 0; j < maxJobs; j++ {
 				if err := c.Send(
 					ctx,
 					labor.Request{
-						Name: fmt.Sprintf("job_%d", j),
+						Name: fmt.Sprintf("%s_job_%d", customer.Name, j+1),
 						Data: nil,
 					},
 					m); err != nil {
+					fmt.Println(err)
 					break
 				}
-				requestCounters[id]++
-
-				if sleep {
-					time.Sleep(1 * time.Second)
-				}
 			}
-		}(customer, i)
+		}(ctx, customer, i)
 
 		go func(ctx context.Context, c *labor.Customer, id int) {
 			for {
@@ -70,25 +63,22 @@ func main() {
 					return
 				default:
 					if res := c.Receive(ctx); res != nil {
-						responseCounters[id]++
+						logger.Log(ctx, slog.LevelInfo, "received reply", slog.Any("reply", res))
 					}
 				}
 			}
-		}(ctx, customer, i)
+		}(context.Background(), customer, i)
 	}
 
 	time.Sleep(time.Duration(runTime+1) * time.Second)
+	var requests int
+	var responses int
+
+	for i := 0; i < maxCustomers; i++ {
+		requests = requests + customers[i].Requests
+		responses = responses + customers[i].Responses
+	}
 	cancel()
-
-	var requestCounter int
-	for reqC := range requestCounters {
-		requestCounter = requestCounter + reqC
-	}
-
-	var responseCounter int
-	for resC := range responseCounters {
-		responseCounter = responseCounter + resC
-	}
-	fmt.Printf("Processed jobs %d/%d in %s\n", responseCounter, requestCounter, time.Since(startTime))
-
+	fmt.Println("Processed requests:", requests)
+	fmt.Println("Processed responses:", responses)
 }
