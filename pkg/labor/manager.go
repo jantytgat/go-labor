@@ -26,7 +26,7 @@ type ManagerConfig struct {
 	OperatorEventLogLevel  slog.Level
 }
 
-func NewManager(ctx context.Context, c ManagerConfig, l *slog.Logger) *Manager {
+func NewManager(c ManagerConfig, l *slog.Logger) *Manager {
 	l = l.With(
 		slog.Group(
 			"manager",
@@ -63,7 +63,6 @@ func NewManager(ctx context.Context, c ManagerConfig, l *slog.Logger) *Manager {
 	}
 
 	m := &Manager{
-		ctx:       ctx,
 		config:    c,
 		logger:    l,
 		scheduler: s,

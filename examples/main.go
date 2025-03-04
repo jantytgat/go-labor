@@ -32,7 +32,7 @@ func main() {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(runTime)*time.Second)
-	m := labor.NewManager(ctx, mc, logger)
+	m := labor.NewManager(mc, logger)
 	m.Enable(ctx)
 
 	var customers = make([]*labor.Customer, maxCustomers)
