@@ -13,14 +13,16 @@ const (
 var (
 	schedulerUnsupportedMessageEvent = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "unsupported message"}
 	schedulerReceivedJobEvent        = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler received job"}
+	schedulerReceivedProcessEvent    = Event{Category: laborEventCategory, Type: schedulerKind.String(), Message: "scheduler received process"}
 )
 
 type schedulerConfig struct {
-	Address           *Address
-	Router            *router
-	AvailableOperator chan Addressable
-	EventLogger       *slog.Logger
-	EventLogLevel     slog.Level
+	Address            *Address
+	Router             *router
+	AvailableOperator  chan Addressable
+	AvailableProcessor chan Addressable
+	EventLogger        *slog.Logger
+	EventLogLevel      slog.Level
 }
 
 func newScheduler(config schedulerConfig) *scheduler {
@@ -55,6 +57,20 @@ func (s *scheduler) Receive(e envelope) {
 				Receiver: availableOperator,
 				Message:  e.Message,
 			})
+		}
+	case Process:
+		if process, ok := e.Message.(Process); ok {
+			s.logEvent(e.ctx, s, schedulerReceivedProcessEvent.WithInfo(process.Name))
+
+			availableProcessor := <-s.config.AvailableProcessor
+
+			s.config.Router.Send(envelope{
+				ctx:      e.ctx,
+				Sender:   e.Sender,
+				Receiver: availableProcessor,
+				Message:  e.Message,
+			})
+
 		}
 	default:
 		s.logEvent(e.ctx, s, schedulerUnsupportedMessageEvent)
