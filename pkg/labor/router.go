@@ -19,22 +19,22 @@ type routerConfig struct {
 
 func newRouter(config routerConfig) *router {
 	return &router{
-		config:   config,
-		contacts: make(map[Addressable]bool),
+		config:             config,
+		broadcastListeners: make(map[Addressable]bool),
 	}
 }
 
 type router struct {
-	config      routerConfig
-	contacts    map[Addressable]bool
-	eventLogger *slog.Logger
-	mux         sync.RWMutex
+	config             routerConfig
+	broadcastListeners map[Addressable]bool
+	eventLogger        *slog.Logger
+	mux                sync.RWMutex
 }
 
 func (r *router) broadcast(e envelope) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
-	for contact, broadcast := range r.contacts {
+	for contact, broadcast := range r.broadcastListeners {
 		if !broadcast {
 			continue
 		}
@@ -62,7 +62,7 @@ func (r *router) Send(e envelope) {
 func (r *router) Register(a Addressable) {
 	r.mux.Lock()
 	defer r.mux.Unlock()
-	r.contacts[a] = true
+	r.broadcastListeners[a] = true
 }
 
 func (r *router) send(e envelope) {
@@ -85,5 +85,5 @@ func (r *router) forward(e envelope) {
 func (r *router) Unregister(a Addressable) {
 	r.mux.Lock()
 	defer r.mux.Unlock()
-	delete(r.contacts, a)
+	delete(r.broadcastListeners, a)
 }
