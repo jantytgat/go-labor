@@ -31,7 +31,6 @@ func NewManager(c ManagerConfig, l *slog.Logger) *Manager {
 		r                   *router
 		s                   *scheduler
 		o                   []*operator
-		p                   *processor
 		chAvailableOperator chan Addressable
 	)
 
@@ -54,11 +53,6 @@ func NewManager(c ManagerConfig, l *slog.Logger) *Manager {
 		AvailableOperator: chAvailableOperator,
 		EventLogger:       l,
 		EventLogLevel:     c.SchedulerEventLogLevel,
-	})
-
-	p = newProcessor(processorConfig{
-		Router:  r,
-		Address: c.Address.Child(processorKind, processorId),
 	})
 
 	o = make([]*operator, c.MaxOperators)
