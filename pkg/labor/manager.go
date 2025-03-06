@@ -27,30 +27,41 @@ type ManagerConfig struct {
 }
 
 func NewManager(c ManagerConfig, l *slog.Logger) *Manager {
+	var (
+		r                   *router
+		s                   *scheduler
+		o                   []*operator
+		p                   *processor
+		chAvailableOperator chan Addressable
+	)
+
 	l = l.With(
 		slog.Group(
 			"manager",
 			slog.Any("address", c.Address.LogValue())))
 
-	rConfig := routerConfig{
+	chAvailableOperator = make(chan Addressable, c.MaxOperators)
+
+	r = newRouter(routerConfig{
 		address:       c.Address.Child(routerKind, routerId),
 		EventLogger:   l,
 		EventLogLevel: c.RouterEventLogLevel,
-	}
-	r := newRouter(rConfig)
+	})
 
-	chAvailableOperator := make(chan Addressable, c.MaxOperators)
-
-	sConfig := schedulerConfig{
+	s = newScheduler(schedulerConfig{
 		Router:            r,
 		Address:           c.Address.Child(schedulerKind, schedulerId),
 		AvailableOperator: chAvailableOperator,
 		EventLogger:       l,
 		EventLogLevel:     c.SchedulerEventLogLevel,
-	}
-	s := newScheduler(sConfig)
+	})
 
-	o := make([]*operator, c.MaxOperators)
+	p = newProcessor(processorConfig{
+		Router:  r,
+		Address: c.Address.Child(processorKind, processorId),
+	})
+
+	o = make([]*operator, c.MaxOperators)
 	for i := 0; i < c.MaxOperators; i++ {
 		oConfig := operatorConfig{
 			Router:            r,
@@ -62,7 +73,7 @@ func NewManager(c ManagerConfig, l *slog.Logger) *Manager {
 		o[i] = newOperator(oConfig)
 	}
 
-	m := &Manager{
+	return &Manager{
 		config:    c,
 		logger:    l,
 		scheduler: s,
@@ -70,7 +81,6 @@ func NewManager(c ManagerConfig, l *slog.Logger) *Manager {
 		router:    r,
 		enabled:   false,
 	}
-	return m
 }
 
 type Manager struct {
