@@ -12,27 +12,25 @@ import (
 )
 
 var (
-	logLevel         = slog.LevelWarn
+	logLevel         = slog.LevelDebug
 	runTime      int = 10
 	managerName      = "example"
 	maxJobs      int = 1000000
-	maxCustomers     = 20
+	maxCustomers     = 2000
 	maxOperators int = runtime.NumCPU() * maxCustomers * 2
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	mc := labor.ManagerConfig{
-		Address:                labor.NewAddress(labor.LocalAddress, "manager", managerName),
-		ManagerEventLogLevel:   slog.LevelInfo,
-		RouterEventLogLevel:    slog.LevelDebug,
-		SchedulerEventLogLevel: slog.LevelDebug,
-		OperatorEventLogLevel:  slog.LevelDebug,
-		MaxOperators:           maxOperators,
+		Address:       labor.NewAddress(labor.LocalAddress, "manager", managerName),
+		EventLogger:   logger,
+		EventLogLevel: logLevel,
+		MaxOperators:  maxOperators,
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(runTime)*time.Second)
-	m := labor.NewManager(mc, logger)
+	m := labor.NewManager(mc)
 	m.Enable(ctx)
 
 	var customers = make([]*labor.Customer, maxCustomers)
@@ -50,7 +48,7 @@ func main() {
 						Data: nil,
 					},
 					m); err != nil {
-					//fmt.Println(err)
+					// fmt.Println(err)
 					return
 				}
 			}

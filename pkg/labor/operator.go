@@ -3,32 +3,29 @@ package labor
 import (
 	"context"
 	"fmt"
-	"log/slog"
 )
 
 const (
-	operatorKind Kind = "operator"
+	operatorKind Kind = "operators"
 )
 
 var (
-	operatorAvailableEvent   = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator available"}
-	operatorReceivedJobEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operator received job"}
+	operatorAvailableEvent   = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operators available"}
+	operatorReceivedJobEvent = Event{Category: laborEventCategory, Type: operatorKind.String(), Message: "operators received job"}
 )
 
 type operatorConfig struct {
 	Address           *Address
-	Router            *router
+	Manager           *Manager
 	AvailableOperator chan Addressable
-	EventLogger       *slog.Logger
-	EventLogLevel     slog.Level
 }
 
 func newOperator(config operatorConfig) *operator {
 	o := &operator{
 		config: config,
 	}
-	o.config.Router.Register(o)
-	o.logEvent(context.TODO(), o, operatorAvailableEvent.WithInfo(o.Address().id))
+	o.config.Manager.Register(o)
+	o.config.Manager.logEvent(context.TODO(), o, operatorAvailableEvent.WithInfo(o.Address().id))
 	config.AvailableOperator <- o
 	return o
 }
@@ -47,12 +44,12 @@ func (o *operator) Receive(e envelope) {
 	switch e.Message.(type) {
 	case Request:
 		if request, ok := e.Message.(Request); ok {
-			o.logEvent(e.ctx, o, operatorReceivedJobEvent.WithInfo(request.Name))
+			o.config.Manager.logEvent(e.ctx, o, operatorReceivedJobEvent.WithInfo(request.Name))
 
 			// Execute job
 
 			// Send result back to the customer
-			o.config.Router.Send(envelope{
+			o.config.Manager.send(envelope{
 				ctx:      e.ctx,
 				Sender:   o,
 				Receiver: e.Sender,
@@ -60,16 +57,8 @@ func (o *operator) Receive(e envelope) {
 			})
 		}
 	default:
-		o.logEvent(e.ctx, o, schedulerUnsupportedMessageEvent)
+		o.config.Manager.logEvent(e.ctx, o, UnsupportedMessageEvent)
 	}
-	o.logEvent(e.ctx, o, operatorAvailableEvent.WithInfo(o.Address().id))
+	o.config.Manager.logEvent(e.ctx, o, operatorAvailableEvent.WithInfo(o.Address().id))
 	o.config.AvailableOperator <- o
-}
-
-func (o *operator) logEvent(ctx context.Context, sender Addressable, event Event) {
-	o.config.EventLogger.LogAttrs(
-		ctx,
-		o.config.EventLogLevel,
-		event.String(),
-		event.LogValue(sender.Address()))
 }

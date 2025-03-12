@@ -35,10 +35,10 @@ func (c *Customer) Send(ctx context.Context, job Request, m *Manager) error {
 		return fmt.Errorf("manager is not accepting new messages")
 	}
 
-	m.router.Send(envelope{
+	m.send(envelope{
 		ctx:      ctx,
 		Sender:   c.res,
-		Receiver: m.scheduler,
+		Receiver: m,
 		Message:  job,
 	})
 	c.Requests++

@@ -115,13 +115,13 @@ func TestAddress_HasParent(t *testing.T) {
 			want:    false,
 		},
 		{
-			name:    "operator",
+			name:    "operators",
 			address: NewAddress(LocalLocation, "manager", "root").Child("router", "true"),
 			want:    true,
 		},
 		{
 			name:    "worker",
-			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			address: NewAddress(LocalLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
 			want:    true,
 		},
 	}
@@ -146,14 +146,14 @@ func TestAddress_Parent(t *testing.T) {
 			want:    nil,
 		},
 		{
-			name:    "operator",
+			name:    "operators",
 			address: NewAddress(LocalLocation, "manager", "root").Child("router", "true"),
 			want:    &Address{parent: nil, location: LocalLocation, kind: "manager", id: "root"},
 		},
 		{
 			name:    "worker",
-			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
-			want:    &Address{parent: &Address{parent: nil, location: LocalLocation, kind: "manager", id: "root"}, kind: "operator", id: "root"},
+			address: NewAddress(LocalLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
+			want:    &Address{parent: &Address{parent: nil, location: LocalLocation, kind: "manager", id: "root"}, kind: "operators", id: "root"},
 		},
 	}
 	for _, tt := range tests {
@@ -183,8 +183,8 @@ func TestAddress_String(t *testing.T) {
 		},
 		{
 			name:    "worker",
-			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
-			want:    "local/manager/root/operator/root/worker/1",
+			address: NewAddress(LocalLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
+			want:    "local/manager/root/operators/root/worker/1",
 		},
 	}
 	for _, tt := range tests {
@@ -214,8 +214,8 @@ func TestAddress_LogValue(t *testing.T) {
 		},
 		{
 			name:    "worker",
-			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
-			want:    slog.StringValue("local/manager/root/operator/root/worker/1"),
+			address: NewAddress(LocalLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
+			want:    slog.StringValue("local/manager/root/operators/root/worker/1"),
 		},
 	}
 	for _, tt := range tests {
@@ -255,12 +255,12 @@ func TestAddress_IsBroadcast(t *testing.T) {
 		},
 		{
 			name:    "multiNestedNonBroadcast",
-			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			address: NewAddress(LocalLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
 			want:    false,
 		},
 		{
 			name:    "multiNestedBroadcast",
-			address: NewAddress(BroadcastLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			address: NewAddress(BroadcastLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
 			want:    true,
 		},
 	}
@@ -301,12 +301,12 @@ func TestAddress_IsLocal(t *testing.T) {
 		},
 		{
 			name:    "multiNestedLocal",
-			address: NewAddress(LocalLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			address: NewAddress(LocalLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
 			want:    true,
 		},
 		{
 			name:    "multiNestedNonLocal",
-			address: NewAddress(BroadcastLocation, "manager", "root").Child("operator", "root").Child("worker", "1"),
+			address: NewAddress(BroadcastLocation, "manager", "root").Child("operators", "root").Child("worker", "1"),
 			want:    false,
 		},
 	}
