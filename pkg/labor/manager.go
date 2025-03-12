@@ -78,6 +78,7 @@ type Manager struct {
 	availableOperator  chan Addressable
 	availableProcessor chan Addressable
 	broadcastListeners map[Addressable]bool
+	processLibrary     map[Addressable]bool
 	mux                sync.RWMutex
 }
 
@@ -133,6 +134,36 @@ func (m *Manager) enable() {
 	m.enabled = true
 }
 
+func (m *Manager) handleProcess(e envelope) {
+	if process, ok := e.Message.(Process); ok {
+		m.logEvent(e.ctx, m, ReceivedProcessEvent.WithInfo(process.Name))
+
+		availableProcessor := <-m.availableProcessor
+
+		m.send(envelope{
+			ctx:      e.ctx,
+			Sender:   e.Sender,
+			Receiver: availableProcessor,
+			Message:  e.Message,
+		})
+	}
+}
+
+func (m *Manager) handleJob(e envelope) {
+	if request, ok := e.Message.(Job); ok {
+		m.logEvent(e.ctx, m, ReceivedJobEvent.WithInfo(request.Name))
+
+		availableOperator := <-m.availableOperator
+
+		m.send(envelope{
+			ctx:      e.ctx,
+			Sender:   e.Sender,
+			Receiver: availableOperator,
+			Message:  e.Message,
+		})
+	}
+}
+
 func (m *Manager) IsEnabled() bool {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
@@ -149,32 +180,10 @@ func (m *Manager) logEvent(ctx context.Context, sender Addressable, event Event)
 
 func (m *Manager) Receive(e envelope) {
 	switch e.Message.(type) {
-	case Request:
-		if request, ok := e.Message.(Request); ok {
-			m.logEvent(e.ctx, m, ReceivedJobEvent.WithInfo(request.Name))
-
-			availableOperator := <-m.availableOperator
-
-			m.send(envelope{
-				ctx:      e.ctx,
-				Sender:   e.Sender,
-				Receiver: availableOperator,
-				Message:  e.Message,
-			})
-		}
+	case Job:
+		m.handleJob(e)
 	case Process:
-		if process, ok := e.Message.(Process); ok {
-			m.logEvent(e.ctx, m, ReceivedProcessEvent.WithInfo(process.Name))
-
-			availableProcessor := <-m.availableProcessor
-
-			m.send(envelope{
-				ctx:      e.ctx,
-				Sender:   e.Sender,
-				Receiver: availableProcessor,
-				Message:  e.Message,
-			})
-		}
+		m.handleProcess(e)
 	default:
 		m.logEvent(e.ctx, m, UnsupportedMessageEvent)
 	}

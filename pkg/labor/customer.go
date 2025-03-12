@@ -26,7 +26,7 @@ type Customer struct {
 	res       *responseHandler
 }
 
-func (c *Customer) Send(ctx context.Context, job Request, m *Manager) error {
+func (c *Customer) Send(ctx context.Context, job Job, m *Manager) error {
 	if c.res == nil {
 		return fmt.Errorf("customer not properly initialized")
 	}
@@ -35,11 +35,10 @@ func (c *Customer) Send(ctx context.Context, job Request, m *Manager) error {
 		return fmt.Errorf("manager is not accepting new messages")
 	}
 
-	m.send(envelope{
-		ctx:      ctx,
-		Sender:   c.res,
-		Receiver: m,
-		Message:  job,
+	m.Receive(envelope{
+		ctx:     ctx,
+		Sender:  c.res,
+		Message: job,
 	})
 	c.Requests++
 	return nil

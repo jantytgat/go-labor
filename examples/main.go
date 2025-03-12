@@ -43,7 +43,7 @@ func main() {
 			for j := 0; j < maxJobs; j++ {
 				if err := c.Send(
 					ctx,
-					labor.Request{
+					labor.Job{
 						Name: fmt.Sprintf("%s_job_%d", customer.Name, j+1),
 						Data: nil,
 					},

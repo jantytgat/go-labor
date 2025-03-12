@@ -42,8 +42,8 @@ func (o *operator) Address() *Address {
 
 func (o *operator) Receive(e envelope) {
 	switch e.Message.(type) {
-	case Request:
-		if request, ok := e.Message.(Request); ok {
+	case Job:
+		if request, ok := e.Message.(Job); ok {
 			o.config.Manager.logEvent(e.ctx, o, operatorReceivedJobEvent.WithInfo(request.Name))
 
 			// Execute job
