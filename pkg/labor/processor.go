@@ -11,44 +11,47 @@ const (
 )
 
 var (
+	processorNotFoundEvent      = Event{Category: laborEventCategory, Type: processKind.String(), Message: "processor not found"}
+	processorInitializedEvent   = Event{Category: laborEventCategory, Type: processKind.String(), Message: "processor initialized"}
+	processorAvailableEvent     = Event{Category: laborEventCategory, Type: processKind.String(), Message: "processor available"}
 	processorHandleProcessEvent = Event{Category: laborEventCategory, Type: processKind.String(), Message: "handle process"}
 )
 
-func NewProcessor(m *Manager, t Task) *Processor {
-	p := &Processor{
+func newProcessor(m *Manager, t Task) {
+	var maxConcurrent int
+	if maxConcurrent = t.Handler().maxConcurrent; maxConcurrent == 0 {
+		maxConcurrent = m.config.MaxOperators
+	}
+
+	p := &processor{
 		address:     m.Address().Child(processKind, reflect.TypeOf(t).String()),
 		execute:     t.Handler().execute,
 		timeout:     t.Handler().timeout,
-		chAvailable: make(chan Addressable, t.Handler().maxConcurrent),
+		chAvailable: make(chan Addressable, maxConcurrent),
+		manager:     m,
 	}
 
 	m.Register(p, false)
 
-	for i := 0; i < t.Handler().maxConcurrent; i++ {
-		p.chAvailable <- p
+	for i := 0; i < maxConcurrent; i++ {
+		p.makeAvailable(m.ctx)
 	}
-
-	return p
 }
 
-type Processor struct {
+type processor struct {
 	address     *Address
 	manager     *Manager
-	execute     func(ctx context.Context, t Task, data any)
+	execute     func(ctx context.Context, t Task, data any) Process
 	timeout     time.Duration
 	chAvailable chan Addressable
 }
 
-func (p *Processor) Address() *Address {
+func (p *processor) Address() *Address {
 	return p.address
 }
 
-func (p *Processor) Available() chan Addressable {
-	return p.chAvailable
-}
-
-func (p *Processor) Receive(e envelope) {
-	defer p.makeAvailable()
+func (p *processor) Receive(e envelope) {
+	defer p.makeAvailable(e.ctx)
 	p.manager.logEvent(e.ctx, p, processorHandleProcessEvent)
 
 	switch e.Message.(type) {
@@ -57,24 +60,23 @@ func (p *Processor) Receive(e envelope) {
 		if !ok {
 			// TODO ERROR HANDLING
 		}
-		p.manager.logEvent(e.ctx, p, processorHandleProcessEvent.WithInfo(process))
 
 		execCtx, cancel := context.WithTimeout(e.ctx, p.timeout)
 		defer cancel()
 
-		p.execute(execCtx, process.Task, process.Data)
-
-		p.manager.Receive(envelope{
-			ctx:      e.ctx,
-			Sender:   p,
-			Receiver: e.Sender,
-			Message:  process,
-		})
+		res := p.execute(execCtx, process.Task, process.Data)
+		env := envelope{
+			ctx:     e.ctx,
+			Sender:  p,
+			Message: res,
+		}
+		e.Sender.Receive(env)
 	default:
 		p.manager.logEvent(e.ctx, p, unsupportedMessageEvent)
 	}
 }
 
-func (p *Processor) makeAvailable() {
+func (p *processor) makeAvailable(ctx context.Context) {
+	p.manager.logEvent(ctx, p, processorAvailableEvent.WithInfo(p.address.id))
 	p.chAvailable <- p
 }

@@ -3,6 +3,7 @@ package labor
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 const (
@@ -16,6 +17,8 @@ func NewCustomer(name string) *Customer {
 			address: NewAddress(LocalLocation, customerKind, name),
 			output:  make(chan envelope),
 		},
+		Requests:  0,
+		Responses: 0,
 	}
 }
 
@@ -24,6 +27,7 @@ type Customer struct {
 	Requests  int
 	Responses int
 	res       *responseHandler
+	mux       sync.Mutex
 }
 
 func (c *Customer) Send(ctx context.Context, job Job, m *Manager) error {
@@ -35,12 +39,15 @@ func (c *Customer) Send(ctx context.Context, job Job, m *Manager) error {
 		return fmt.Errorf("manager is not accepting new messages")
 	}
 
-	m.Receive(envelope{
+	go m.Receive(envelope{
 		ctx:     ctx,
 		Sender:  c.res,
 		Message: job,
 	})
+
+	c.mux.Lock()
 	c.Requests++
+	c.mux.Unlock()
 	return nil
 }
 
@@ -49,9 +56,23 @@ func (c *Customer) Receive(ctx context.Context) any {
 	case <-ctx.Done():
 		return nil
 	case e := <-c.res.output:
+		c.mux.Lock()
 		c.Responses++
+		c.mux.Unlock()
 		return e.Message
 	}
+}
+
+func (c *Customer) RequestsTotal() int {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	return c.Requests
+}
+
+func (c *Customer) ResponsesTotal() int {
+	c.mux.Lock()
+	defer c.mux.Unlock()
+	return c.Responses
 }
 
 type responseHandler struct {

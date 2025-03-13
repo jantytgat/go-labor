@@ -5,21 +5,20 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
+	"sync"
 	"time"
 
 	"github.com/jantytgat/go-labor/pkg/labor"
 )
 
 var (
-	logLevel        = slog.LevelDebug
-	runTime     int = 10
-	managerName     = "example"
-	//maxJobs      int = 1000000
-	//maxCustomers     = 2000
-	//maxOperators int = runtime.NumCPU() * maxCustomers * 2
-	maxJobs      int = 10
-	maxCustomers     = 1
-	maxOperators int = 1
+	logLevel         = slog.LevelInfo
+	evenLogLevel     = slog.LevelDebug
+	managerName      = "example"
+	maxJobs      int = 1000
+	maxCustomers     = 200
+	maxOperators int = runtime.NumCPU() * maxCustomers * 2
 )
 
 func main() {
@@ -27,66 +26,97 @@ func main() {
 	mc := labor.ManagerConfig{
 		Address:       labor.NewAddress(labor.LocalAddress, "manager", managerName),
 		EventLogger:   logger,
-		EventLogLevel: logLevel,
+		EventLogLevel: evenLogLevel,
 		MaxOperators:  maxOperators,
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(runTime)*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	m := labor.NewManager(mc)
 	m.Enable(ctx)
 
 	var customers = make([]*labor.Customer, maxCustomers)
+	var mux sync.Mutex
 
-	for i := 0; i < maxCustomers; i++ {
-		customer := labor.NewCustomer(fmt.Sprintf("customer_%d", i+1))
-		customers[i] = customer
+	wg := &sync.WaitGroup{}
+	go func(wg *sync.WaitGroup) {
+		for i := 0; i < maxCustomers; i++ {
+			customer := labor.NewCustomer(fmt.Sprintf("customer_%d", i+1))
+			mux.Lock()
+			customers[i] = customer
+			mux.Unlock()
 
-		go func(ctx context.Context, c *labor.Customer, id int) {
-			for j := 0; j < maxJobs; j++ {
-				if err := c.Send(
-					ctx,
-					labor.Job{
-						Name: fmt.Sprintf("%s_job_%d", customer.Name, j+1),
-						Data: nil,
-						Pipeline: labor.Pipeline{
-							Sequence: []labor.Process{{
-								Task:   labor.PrintTask{},
-								Data:   nil,
-								Output: nil,
-							}},
+			go func(ctx context.Context, c *labor.Customer, id int) {
+				for j := 0; j < maxJobs; j++ {
+					err := c.Send(
+						ctx,
+						labor.Job{
+							Name: fmt.Sprintf("%s_job_%d", customer.Name, j+1),
 							Data: nil,
+							Pipeline: labor.Pipeline{
+								Sequence: []labor.Process{
+									{
+										Task:   labor.PrintTask{},
+										Data:   fmt.Sprintf("%s_job_%d_1", customer.Name, j+1),
+										Output: nil,
+									}, {
+										Task:   labor.PrintTask{},
+										Data:   fmt.Sprintf("%s_job_%d_2", customer.Name, j+1),
+										Output: nil,
+									},
+								},
+								Data: nil,
+							},
 						},
-					},
-					m); err != nil {
-					// fmt.Println(err)
-					return
-				}
-			}
-		}(ctx, customer, i)
-
-		go func(ctx context.Context, c *labor.Customer, id int) {
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					if res := c.Receive(ctx); res != nil {
-						logger.Log(ctx, slog.LevelInfo, "received reply", slog.Any("reply", res))
+						m)
+					if err != nil {
+						return
 					}
 				}
-			}
-		}(context.Background(), customer, i)
-	}
+			}(ctx, customer, i)
 
-	time.Sleep(time.Duration(runTime+1) * time.Second)
+			go func(ctx context.Context, c *labor.Customer) {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						if res := c.Receive(ctx); res != nil {
+							logger.Log(ctx, slog.LevelInfo, "received reply", slog.Any("reply", res))
+						}
+					}
+				}
+			}(context.Background(), customer)
+		}
+		wg.Done()
+	}(wg)
+	wg.Add(1)
+
+	wg.Wait()
+	startTime := time.Now()
+
 	var requests int
 	var responses int
 
-	for i := 0; i < maxCustomers; i++ {
-		requests = requests + customers[i].Requests
-		responses = responses + customers[i].Responses
+Detect:
+	for {
+		requests = 0
+		responses = 0
+
+		mux.Lock()
+		for i := 0; i < maxCustomers; i++ {
+			requests = requests + customers[i].RequestsTotal()
+			responses = responses + customers[i].ResponsesTotal()
+		}
+		mux.Unlock()
+
+		if requests != 0 && responses != 0 && requests == responses {
+			break Detect
+		}
 	}
-	cancel()
+
 	fmt.Println("Processed requests:", requests)
 	fmt.Println("Processed responses:", responses)
+	fmt.Println("Total time:", time.Since(startTime))
 }

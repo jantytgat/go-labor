@@ -16,7 +16,7 @@ const (
 var (
 	managerEnabledEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager enabled"}
 	managerDisabledEvent        = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager disabled"}
-	registerEvent               = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "register address"}
+	registeredEvent             = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "registered address"}
 	unsupportedMessageEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "unsupported message"}
 	managerReceivedJobEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received job"}
 	managerReceivedProcessEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received process"}
@@ -31,9 +31,8 @@ type ManagerConfig struct {
 
 func NewManager(c ManagerConfig) *Manager {
 	var (
-		l *slog.Logger
-		m *Manager
-		//o                   []*operator
+		l                   *slog.Logger
+		m                   *Manager
 		chAvailableOperator chan Addressable
 	)
 
@@ -55,22 +54,19 @@ func NewManager(c ManagerConfig) *Manager {
 		eventLogLevel:      c.EventLogLevel,
 	}
 
-	//o = make([]*operator, c.MaxOperators)
 	for i := 0; i < c.MaxOperators; i++ {
-		m.Register(newOperator(fmt.Sprintf("operator_%d", i+1), m, chAvailableOperator), false)
+		newOperator(fmt.Sprintf("operator_%d", i+1), m, chAvailableOperator)
 	}
 
-	//m.operators = o
 	return m
 }
 
 type Manager struct {
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	config    ManagerConfig
-	address   *Address
-	enabled   bool
-	//operators         []*operator
+	ctx                context.Context
+	ctxCancel          context.CancelFunc
+	config             ManagerConfig
+	address            *Address
+	enabled            bool
 	eventLogger        *slog.Logger
 	eventLogLevel      slog.Level
 	availableOperator  chan Addressable
@@ -134,40 +130,20 @@ func (m *Manager) handleProcess(e envelope) {
 	if process, ok := e.Message.(Process); ok {
 		m.logEvent(e.ctx, m, managerReceivedProcessEvent.WithInfo(process))
 
-		var processor Addressable
-		var err error
-		if processor, err = m.processor(process.Task); err != nil {
-			_ = NewProcessor(m, process.Task)
-			processor, err = m.processor(process.Task)
-			if err != nil {
-				panic(err)
-			}
-		}
-
-		m.logEvent(e.ctx, m, Event{
-			Category: "temp",
-			Type:     "temp",
-			Message:  "send to processor",
-			Info:     nil,
-		})
-
-		fmt.Println("available processor", processor)
-		processor.Receive(envelope{
-			ctx:      e.ctx,
-			Sender:   e.Sender,
-			Receiver: processor,
-			Message:  process,
+		m.processor(process.Task).Receive(envelope{
+			ctx:     e.ctx,
+			Sender:  e.Sender,
+			Message: process,
 		})
 	}
 }
 
 func (m *Manager) handleJob(e envelope) {
-	if request, ok := e.Message.(Job); ok {
-		m.logEvent(e.ctx, m, managerReceivedJobEvent.WithInfo(request.Name))
-
+	if job, ok := e.Message.(Job); ok {
+		m.logEvent(e.ctx, m, managerReceivedJobEvent.WithInfo(job.Name))
 		availableOperator := <-m.availableOperator
 
-		m.send(envelope{
+		availableOperator.Receive(envelope{
 			ctx:      e.ctx,
 			Sender:   e.Sender,
 			Receiver: availableOperator,
@@ -190,23 +166,20 @@ func (m *Manager) logEvent(ctx context.Context, sender Addressable, event Event)
 		event.LogValue(sender.Address()))
 }
 
-func (m *Manager) processor(t Task) (Addressable, error) {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
+func (m *Manager) processor(t Task) Addressable {
+	address := m.address.Child(processKind, reflect.TypeOf(t).String()).String()
 
-	address := m.address.Child(processKind, reflect.TypeOf(t).String())
-	fmt.Println(address.String())
-	var processor Addressable
-	var ok bool
+	m.mux.Lock()
+	_, ok := m.registry[address]
+	m.mux.Unlock()
 
-	if processor, ok = m.registry[address.String()]; ok {
-		fmt.Println("processor found")
-		p := processor.(*Processor)
-		pa := <-p.chAvailable
-		return pa, nil
+	if !ok {
+		m.logEvent(context.TODO(), m, processorNotFoundEvent.WithInfo(reflect.TypeOf(t).String()))
+		newProcessor(m, t)
+		m.logEvent(context.TODO(), m, processorInitializedEvent.WithInfo(reflect.TypeOf(t).String()))
 	}
-	fmt.Println("processor not found")
-	return nil, fmt.Errorf("unknown processor: %s", address)
+
+	return <-m.registry[address].(*processor).chAvailable
 }
 
 func (m *Manager) Receive(e envelope) {
@@ -223,12 +196,16 @@ func (m *Manager) Receive(e envelope) {
 func (m *Manager) Register(a Addressable, broadcast bool) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	m.logEvent(context.TODO(), m, registerEvent.WithInfo(a.Address().String()))
+	if _, ok := m.registry[a.Address().String()]; ok {
+		return
+	}
 	m.registry[a.Address().String()] = a
 
 	if broadcast {
 		m.broadcastListeners = append(m.broadcastListeners, a)
 	}
+	m.logEvent(context.TODO(), m, registeredEvent.WithInfo(a.Address().String()))
+
 }
 
 func (m *Manager) Unregister(a Addressable) {

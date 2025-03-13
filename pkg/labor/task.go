@@ -2,7 +2,6 @@ package labor
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
 
@@ -11,7 +10,7 @@ type Task interface {
 }
 
 var (
-	printTaskHandlerMaxConcurrent = 100
+	printTaskHandlerMaxConcurrent = 0
 	printTaskHandlerTimeout       = time.Second * 10
 )
 
@@ -25,6 +24,11 @@ func (t PrintTask) Handler() Handler {
 	}
 }
 
-func printTaskHandlerFunc(ctx context.Context, t Task, data any) {
-	fmt.Println("PRINT", t, data)
+func printTaskHandlerFunc(ctx context.Context, t Task, data any) Process {
+	// fmt.Println("PRINT", t, data)
+	return Process{
+		Output: Response{
+			Data:  data,
+			Error: nil,
+		}}
 }
