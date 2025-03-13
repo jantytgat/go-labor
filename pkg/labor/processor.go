@@ -49,15 +49,14 @@ func (p *Processor) Available() chan Addressable {
 
 func (p *Processor) Receive(e envelope) {
 	defer p.makeAvailable()
+	p.manager.logEvent(e.ctx, p, processorHandleProcessEvent)
 
 	switch e.Message.(type) {
 	case Process:
 		process, ok := e.Message.(Process)
 		if !ok {
-			// Error handling??
-			return
+			// TODO ERROR HANDLING
 		}
-
 		p.manager.logEvent(e.ctx, p, processorHandleProcessEvent.WithInfo(process))
 
 		execCtx, cancel := context.WithTimeout(e.ctx, p.timeout)
@@ -72,7 +71,7 @@ func (p *Processor) Receive(e envelope) {
 			Message:  process,
 		})
 	default:
-		p.manager.logEvent(e.ctx, p, UnsupportedMessageEvent)
+		p.manager.logEvent(e.ctx, p, unsupportedMessageEvent)
 	}
 }
 

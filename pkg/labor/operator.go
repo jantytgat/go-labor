@@ -68,7 +68,7 @@ func (o *operator) Receive(e envelope) {
 			o.manager.logEvent(e.ctx, o, operatorCompletedJobEvent.WithInfo(job.Name))
 		}
 	default:
-		o.manager.logEvent(e.ctx, o, UnsupportedMessageEvent)
+		o.manager.logEvent(e.ctx, o, unsupportedMessageEvent)
 	}
 	o.manager.logEvent(e.ctx, o, operatorAvailableEvent.WithInfo(o.Address().id))
 	o.chAvailable <- o

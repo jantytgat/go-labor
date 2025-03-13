@@ -16,7 +16,8 @@ const (
 var (
 	managerEnabledEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager enabled"}
 	managerDisabledEvent        = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager disabled"}
-	UnsupportedMessageEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "unsupported message"}
+	registerEvent               = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "register address"}
+	unsupportedMessageEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "unsupported message"}
 	managerReceivedJobEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received job"}
 	managerReceivedProcessEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received process"}
 )
@@ -136,15 +137,26 @@ func (m *Manager) handleProcess(e envelope) {
 		var processor Addressable
 		var err error
 		if processor, err = m.processor(process.Task); err != nil {
-			processor = NewProcessor(m, process.Task)
-			m.Register(processor, false)
+			_ = NewProcessor(m, process.Task)
+			processor, err = m.processor(process.Task)
+			if err != nil {
+				panic(err)
+			}
 		}
 
+		m.logEvent(e.ctx, m, Event{
+			Category: "temp",
+			Type:     "temp",
+			Message:  "send to processor",
+			Info:     nil,
+		})
+
+		fmt.Println("available processor", processor)
 		processor.Receive(envelope{
 			ctx:      e.ctx,
 			Sender:   e.Sender,
 			Receiver: processor,
-			Message:  e.Message,
+			Message:  process,
 		})
 	}
 }
@@ -183,12 +195,17 @@ func (m *Manager) processor(t Task) (Addressable, error) {
 	defer m.mux.RUnlock()
 
 	address := m.address.Child(processKind, reflect.TypeOf(t).String())
+	fmt.Println(address.String())
 	var processor Addressable
 	var ok bool
 
 	if processor, ok = m.registry[address.String()]; ok {
-		return processor, nil
+		fmt.Println("processor found")
+		p := processor.(*Processor)
+		pa := <-p.chAvailable
+		return pa, nil
 	}
+	fmt.Println("processor not found")
 	return nil, fmt.Errorf("unknown processor: %s", address)
 }
 
@@ -199,13 +216,14 @@ func (m *Manager) Receive(e envelope) {
 	case Process:
 		m.handleProcess(e)
 	default:
-		m.logEvent(e.ctx, m, UnsupportedMessageEvent)
+		m.logEvent(e.ctx, m, unsupportedMessageEvent)
 	}
 }
 
 func (m *Manager) Register(a Addressable, broadcast bool) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
+	m.logEvent(context.TODO(), m, registerEvent.WithInfo(a.Address().String()))
 	m.registry[a.Address().String()] = a
 
 	if broadcast {
