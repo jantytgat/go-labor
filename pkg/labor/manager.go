@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"reflect"
 	"sync"
 )
 
@@ -13,11 +14,11 @@ const (
 )
 
 var (
-	managerStartedEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager started"}
-	managerStoppedEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager stopped"}
-	UnsupportedMessageEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "unsupported message"}
-	ReceivedJobEvent        = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "router received job"}
-	ReceivedProcessEvent    = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "router received process"}
+	managerEnabledEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager enabled"}
+	managerDisabledEvent        = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager disabled"}
+	UnsupportedMessageEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "unsupported message"}
+	managerReceivedJobEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received job"}
+	managerReceivedProcessEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received process"}
 )
 
 type ManagerConfig struct {
@@ -29,9 +30,9 @@ type ManagerConfig struct {
 
 func NewManager(c ManagerConfig) *Manager {
 	var (
-		l                   *slog.Logger
-		m                   *Manager
-		o                   []*operator
+		l *slog.Logger
+		m *Manager
+		//o                   []*operator
 		chAvailableOperator chan Addressable
 	)
 
@@ -46,39 +47,34 @@ func NewManager(c ManagerConfig) *Manager {
 		config:             c,
 		address:            c.Address,
 		enabled:            false,
-		broadcastListeners: make(map[Addressable]bool),
+		registry:           make(map[string]Addressable),
+		broadcastListeners: make([]Addressable, 0),
 		availableOperator:  chAvailableOperator,
 		eventLogger:        l,
 		eventLogLevel:      c.EventLogLevel,
 	}
 
-	o = make([]*operator, c.MaxOperators)
+	//o = make([]*operator, c.MaxOperators)
 	for i := 0; i < c.MaxOperators; i++ {
-		oConfig := operatorConfig{
-			Manager:           m,
-			Address:           c.Address.Child(operatorKind, fmt.Sprintf("operator_%d", i+1)),
-			AvailableOperator: chAvailableOperator,
-		}
-		o[i] = newOperator(oConfig)
+		m.Register(newOperator(fmt.Sprintf("operator_%d", i+1), m, chAvailableOperator), false)
 	}
 
-	m.operators = o
+	//m.operators = o
 	return m
 }
 
 type Manager struct {
-	ctx                context.Context
-	ctxCancel          context.CancelFunc
-	config             ManagerConfig
-	address            *Address
-	enabled            bool
-	operators          []*operator
+	ctx       context.Context
+	ctxCancel context.CancelFunc
+	config    ManagerConfig
+	address   *Address
+	enabled   bool
+	//operators         []*operator
 	eventLogger        *slog.Logger
 	eventLogLevel      slog.Level
 	availableOperator  chan Addressable
-	availableProcessor chan Addressable
-	broadcastListeners map[Addressable]bool
-	processLibrary     map[Addressable]bool
+	registry           map[string]Addressable
+	broadcastListeners []Addressable
 	mux                sync.RWMutex
 }
 
@@ -89,11 +85,10 @@ func (m *Manager) Address() *Address {
 func (m *Manager) broadcast(e envelope) {
 	m.mux.RLock()
 	defer m.mux.RUnlock()
-	for contact, broadcast := range m.broadcastListeners {
-		if !broadcast {
-			continue
+	for _, broadcast := range m.broadcastListeners {
+		if broadcast != nil {
+			broadcast.Receive(e)
 		}
-		contact.Receive(e)
 	}
 }
 
@@ -110,7 +105,7 @@ func (m *Manager) checkPoison() {
 func (m *Manager) Disable() {
 	if m.IsEnabled() {
 		m.disable()
-		m.logEvent(m.ctx, m, managerStoppedEvent.WithInfo("disabled"))
+		m.logEvent(m.ctx, m, managerDisabledEvent.WithInfo("disabled"))
 	}
 }
 
@@ -125,7 +120,7 @@ func (m *Manager) Enable(ctx context.Context) {
 	go m.checkPoison()
 
 	m.enable()
-	m.logEvent(m.ctx, m, managerStartedEvent.WithInfo("enabled"))
+	m.logEvent(m.ctx, m, managerEnabledEvent.WithInfo("enabled"))
 }
 
 func (m *Manager) enable() {
@@ -136,14 +131,19 @@ func (m *Manager) enable() {
 
 func (m *Manager) handleProcess(e envelope) {
 	if process, ok := e.Message.(Process); ok {
-		m.logEvent(e.ctx, m, ReceivedProcessEvent.WithInfo(process.Name))
+		m.logEvent(e.ctx, m, managerReceivedProcessEvent.WithInfo(process))
 
-		availableProcessor := <-m.availableProcessor
+		var processor Addressable
+		var err error
+		if processor, err = m.processor(process.Task); err != nil {
+			processor = NewProcessor(m, process.Task)
+			m.Register(processor, false)
+		}
 
-		m.send(envelope{
+		processor.Receive(envelope{
 			ctx:      e.ctx,
 			Sender:   e.Sender,
-			Receiver: availableProcessor,
+			Receiver: processor,
 			Message:  e.Message,
 		})
 	}
@@ -151,7 +151,7 @@ func (m *Manager) handleProcess(e envelope) {
 
 func (m *Manager) handleJob(e envelope) {
 	if request, ok := e.Message.(Job); ok {
-		m.logEvent(e.ctx, m, ReceivedJobEvent.WithInfo(request.Name))
+		m.logEvent(e.ctx, m, managerReceivedJobEvent.WithInfo(request.Name))
 
 		availableOperator := <-m.availableOperator
 
@@ -178,6 +178,20 @@ func (m *Manager) logEvent(ctx context.Context, sender Addressable, event Event)
 		event.LogValue(sender.Address()))
 }
 
+func (m *Manager) processor(t Task) (Addressable, error) {
+	m.mux.RLock()
+	defer m.mux.RUnlock()
+
+	address := m.address.Child(processKind, reflect.TypeOf(t).String())
+	var processor Addressable
+	var ok bool
+
+	if processor, ok = m.registry[address.String()]; ok {
+		return processor, nil
+	}
+	return nil, fmt.Errorf("unknown processor: %s", address)
+}
+
 func (m *Manager) Receive(e envelope) {
 	switch e.Message.(type) {
 	case Job:
@@ -189,16 +203,20 @@ func (m *Manager) Receive(e envelope) {
 	}
 }
 
-func (m *Manager) Register(a Addressable) {
+func (m *Manager) Register(a Addressable, broadcast bool) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	m.broadcastListeners[a] = true
+	m.registry[a.Address().String()] = a
+
+	if broadcast {
+		m.broadcastListeners = append(m.broadcastListeners, a)
+	}
 }
 
 func (m *Manager) Unregister(a Addressable) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
-	delete(m.broadcastListeners, a)
+	delete(m.registry, a.Address().String())
 }
 
 func (m *Manager) send(e envelope) {

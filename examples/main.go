@@ -5,19 +5,21 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"runtime"
 	"time"
 
 	"github.com/jantytgat/go-labor/pkg/labor"
 )
 
 var (
-	logLevel         = slog.LevelDebug
-	runTime      int = 10
-	managerName      = "example"
-	maxJobs      int = 1000000
-	maxCustomers     = 2000
-	maxOperators int = runtime.NumCPU() * maxCustomers * 2
+	logLevel        = slog.LevelDebug
+	runTime     int = 10
+	managerName     = "example"
+	//maxJobs      int = 1000000
+	//maxCustomers     = 2000
+	//maxOperators int = runtime.NumCPU() * maxCustomers * 2
+	maxJobs      int = 10
+	maxCustomers     = 1
+	maxOperators int = 1
 )
 
 func main() {
@@ -46,6 +48,14 @@ func main() {
 					labor.Job{
 						Name: fmt.Sprintf("%s_job_%d", customer.Name, j+1),
 						Data: nil,
+						Pipeline: labor.Pipeline{
+							Sequence: []labor.Process{{
+								Task:   labor.PrintTask{},
+								Data:   nil,
+								Output: nil,
+							}},
+							Data: nil,
+						},
 					},
 					m); err != nil {
 					// fmt.Println(err)
