@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/jantytgat/go-labor/pkg/tasks"
 	"log/slog"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 
@@ -13,20 +13,33 @@ import (
 )
 
 var (
-	logLevel         = slog.LevelInfo
-	evenLogLevel     = slog.LevelDebug
-	managerName      = "example"
-	maxJobs      int = 1000
-	maxCustomers     = 200
-	maxOperators int = runtime.NumCPU() * maxCustomers * 2
+	logLevel          = slog.LevelInfo
+	eventLogLevel     = slog.LevelDebug
+	managerName       = "example"
+	maxJobs       int = 200
+	maxCustomers      = 10
+	//maxOperators  int = runtime.NumCPU() * maxCustomers * 2
+	maxOperators = 2
 )
 
 func main() {
+	//var cpuProfile, memProfile *os.File
+	//var err error
+	//cpuProfile, err = os.Create("examples/cpu.profile.log")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//defer cpuProfile.Close()
+	//if err = pprof.StartCPUProfile(cpuProfile); err != nil {
+	//	panic(err)
+	//}
+	//defer pprof.StopCPUProfile()
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	mc := labor.ManagerConfig{
 		Address:       labor.NewAddress(labor.LocalAddress, "manager", managerName),
 		EventLogger:   logger,
-		EventLogLevel: evenLogLevel,
+		EventLogLevel: eventLogLevel,
 		MaxOperators:  maxOperators,
 	}
 
@@ -35,7 +48,6 @@ func main() {
 
 	m := labor.NewManager(mc)
 	m.Enable(ctx)
-
 	var customers = make([]*labor.Customer, maxCustomers)
 	var mux sync.Mutex
 
@@ -53,21 +65,14 @@ func main() {
 						ctx,
 						labor.Job{
 							Name: fmt.Sprintf("%s_job_%d", customer.Name, j+1),
-							Data: nil,
-							Pipeline: labor.Pipeline{
-								Sequence: []labor.Process{
-									{
-										Task:   labor.PrintTask{},
-										Data:   fmt.Sprintf("%s_job_%d_1", customer.Name, j+1),
-										Output: nil,
-									}, {
-										Task:   labor.PrintTask{},
-										Data:   fmt.Sprintf("%s_job_%d_2", customer.Name, j+1),
-										Output: nil,
-									},
+							Sequence: []labor.Process{
+								{
+									Handler: tasks.PrintHandler,
+								}, {
+									Handler: tasks.PrintHandler,
 								},
-								Data: nil,
 							},
+							Data: labor.Pipeline{},
 						},
 						m)
 					if err != nil {
@@ -83,7 +88,7 @@ func main() {
 						return
 					default:
 						if res := c.Receive(ctx); res != nil {
-							logger.Log(ctx, slog.LevelInfo, "received reply", slog.Any("reply", res))
+							//logger.Log(ctx, slog.LevelInfo, "received reply", slog.Any("reply", res))
 						}
 					}
 				}
@@ -94,12 +99,14 @@ func main() {
 	wg.Add(1)
 
 	wg.Wait()
-	startTime := time.Now()
 
 	var requests int
 	var responses int
+	var duration time.Duration
+	startTime := time.Now()
 
 Detect:
+
 	for {
 		requests = 0
 		responses = 0
@@ -112,11 +119,26 @@ Detect:
 		mux.Unlock()
 
 		if requests != 0 && responses != 0 && requests == responses {
+			duration = time.Since(startTime)
+			m.Disable()
 			break Detect
 		}
 	}
 
 	fmt.Println("Processed requests:", requests)
 	fmt.Println("Processed responses:", responses)
-	fmt.Println("Total time:", time.Since(startTime))
+	fmt.Println("Total time:", duration)
+	//
+	//memProfile, err = os.Create("examples/mem.profile.log")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//defer memProfile.Close()
+	//runtime.GC()
+	//if err = pprof.Lookup("allocs").WriteTo(memProfile, 2); err != nil {
+	//	panic(err)
+	//}
+	//if err = pprof.Lookup("heap").WriteTo(memProfile, 2); err != nil {
+	//	panic(err)
+	//}
 }

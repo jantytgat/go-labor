@@ -2,7 +2,6 @@ package labor
 
 import (
 	"context"
-	"reflect"
 	"time"
 )
 
@@ -10,23 +9,17 @@ const (
 	processKind Kind = "process"
 )
 
-var (
-	processorNotFoundEvent      = Event{Category: laborEventCategory, Type: processKind.String(), Message: "processor not found"}
-	processorInitializedEvent   = Event{Category: laborEventCategory, Type: processKind.String(), Message: "processor initialized"}
-	processorAvailableEvent     = Event{Category: laborEventCategory, Type: processKind.String(), Message: "processor available"}
-	processorHandleProcessEvent = Event{Category: laborEventCategory, Type: processKind.String(), Message: "handle process"}
-)
-
-func newProcessor(m *Manager, t Task) {
+func newProcessor(m *Manager, h Handler) {
 	var maxConcurrent int
-	if maxConcurrent = t.Handler().maxConcurrent; maxConcurrent == 0 {
+
+	if maxConcurrent = h.MaxConcurrent; maxConcurrent == 0 {
 		maxConcurrent = m.config.MaxOperators
 	}
 
 	p := &processor{
-		address:     m.Address().Child(processKind, reflect.TypeOf(t).String()),
-		execute:     t.Handler().execute,
-		timeout:     t.Handler().timeout,
+		address:     m.Address().Child(processKind, h.Name),
+		execute:     h.Execute,
+		timeout:     h.Timeout,
 		chAvailable: make(chan Addressable, maxConcurrent),
 		manager:     m,
 	}
@@ -41,7 +34,7 @@ func newProcessor(m *Manager, t Task) {
 type processor struct {
 	address     *Address
 	manager     *Manager
-	execute     func(ctx context.Context, t Task, data any) Process
+	execute     func(ctx context.Context, p Pipeline) Pipeline
 	timeout     time.Duration
 	chAvailable chan Addressable
 }
@@ -50,33 +43,36 @@ func (p *processor) Address() *Address {
 	return p.address
 }
 
-func (p *processor) Receive(e envelope) {
-	defer p.makeAvailable(e.ctx)
+func (p *processor) handleProcess(e envelope) {
 	p.manager.logEvent(e.ctx, p, processorHandleProcessEvent)
 
-	switch e.Message.(type) {
-	case Process:
-		process, ok := e.Message.(Process)
-		if !ok {
-			// TODO ERROR HANDLING
-		}
-
-		execCtx, cancel := context.WithTimeout(e.ctx, p.timeout)
-		defer cancel()
-
-		res := p.execute(execCtx, process.Task, process.Data)
-		env := envelope{
-			ctx:     e.ctx,
-			Sender:  p,
-			Message: res,
-		}
-		e.Sender.Receive(env)
-	default:
-		p.manager.logEvent(e.ctx, p, unsupportedMessageEvent)
+	pipeline, ok := e.Message.(Pipeline)
+	if !ok {
+		panic("invalid process message")
 	}
+
+	execCtx, cancel := context.WithTimeout(e.ctx, p.timeout)
+	defer cancel()
+
+	e.Sender.Receive(envelope{
+		ctx:     e.ctx,
+		Sender:  p,
+		Message: p.execute(execCtx, pipeline),
+	})
 }
 
 func (p *processor) makeAvailable(ctx context.Context) {
 	p.manager.logEvent(ctx, p, processorAvailableEvent.WithInfo(p.address.id))
 	p.chAvailable <- p
+}
+
+func (p *processor) Receive(e envelope) {
+	defer p.makeAvailable(e.ctx)
+
+	switch e.Message.(type) {
+	case Pipeline:
+		p.handleProcess(e)
+	default:
+		p.manager.logEvent(e.ctx, p, unsupportedMessageEvent)
+	}
 }

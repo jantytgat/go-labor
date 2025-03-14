@@ -75,3 +75,9 @@ func (a *Address) String() string {
 		return strings.Join([]string{a.location.String(), a.kind.String(), a.id}, addressSeparator)
 	}
 }
+
+type Location string
+
+func (l Location) String() string {
+	return string(l)
+}

@@ -2,11 +2,11 @@ package labor
 
 type Job struct {
 	Name     string
-	Data     any
-	Pipeline Pipeline
+	Sequence []Process
+	Data     Pipeline
 }
 
 type Pipeline struct {
-	Sequence []Process
-	Data     any
+	Input  any
+	Output any
 }

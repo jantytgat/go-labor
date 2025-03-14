@@ -4,22 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"sync"
-)
-
-const (
-	managerKind Kind = "manager"
-	managerId        = "root"
-)
-
-var (
-	managerEnabledEvent         = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager enabled"}
-	managerDisabledEvent        = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager disabled"}
-	registeredEvent             = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "registered address"}
-	unsupportedMessageEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "unsupported message"}
-	managerReceivedJobEvent     = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received job"}
-	managerReceivedProcessEvent = Event{Category: laborEventCategory, Type: managerKind.String(), Message: "manager received process"}
 )
 
 type ManagerConfig struct {
@@ -31,9 +16,8 @@ type ManagerConfig struct {
 
 func NewManager(c ManagerConfig) *Manager {
 	var (
-		l                   *slog.Logger
-		m                   *Manager
-		chAvailableOperator chan Addressable
+		l *slog.Logger
+		m *Manager
 	)
 
 	l = c.EventLogger.With(
@@ -41,21 +25,19 @@ func NewManager(c ManagerConfig) *Manager {
 			"manager",
 			slog.Any("address", c.Address.LogValue())))
 
-	chAvailableOperator = make(chan Addressable, c.MaxOperators)
-
 	m = &Manager{
 		config:             c,
 		address:            c.Address,
 		enabled:            false,
 		registry:           make(map[string]Addressable),
 		broadcastListeners: make([]Addressable, 0),
-		availableOperator:  chAvailableOperator,
+		chOperator:         make(chan Addressable, c.MaxOperators),
 		eventLogger:        l,
 		eventLogLevel:      c.EventLogLevel,
 	}
 
 	for i := 0; i < c.MaxOperators; i++ {
-		newOperator(fmt.Sprintf("operator_%d", i+1), m, chAvailableOperator)
+		newOperator(fmt.Sprintf("operator_%d", i+1), m)
 	}
 
 	return m
@@ -69,7 +51,7 @@ type Manager struct {
 	enabled            bool
 	eventLogger        *slog.Logger
 	eventLogLevel      slog.Level
-	availableOperator  chan Addressable
+	chOperator         chan Addressable
 	registry           map[string]Addressable
 	broadcastListeners []Addressable
 	mux                sync.RWMutex
@@ -126,22 +108,10 @@ func (m *Manager) enable() {
 	m.enabled = true
 }
 
-func (m *Manager) handleProcess(e envelope) {
-	if process, ok := e.Message.(Process); ok {
-		m.logEvent(e.ctx, m, managerReceivedProcessEvent.WithInfo(process))
-
-		m.processor(process.Task).Receive(envelope{
-			ctx:     e.ctx,
-			Sender:  e.Sender,
-			Message: process,
-		})
-	}
-}
-
 func (m *Manager) handleJob(e envelope) {
 	if job, ok := e.Message.(Job); ok {
 		m.logEvent(e.ctx, m, managerReceivedJobEvent.WithInfo(job.Name))
-		availableOperator := <-m.availableOperator
+		availableOperator := <-m.chOperator
 
 		availableOperator.Receive(envelope{
 			ctx:      e.ctx,
@@ -159,26 +129,27 @@ func (m *Manager) IsEnabled() bool {
 }
 
 func (m *Manager) logEvent(ctx context.Context, sender Addressable, event Event) {
+	//if m.eventLogLevel >= event.Level {
 	m.eventLogger.LogAttrs(
 		ctx,
-		m.eventLogLevel,
+		event.Level,
 		event.String(),
 		event.LogValue(sender.Address()))
+	//}
 }
 
-func (m *Manager) processor(t Task) Addressable {
-	address := m.address.Child(processKind, reflect.TypeOf(t).String()).String()
-
+func (m *Manager) processor(h Handler) Addressable {
 	m.mux.Lock()
+	address := m.address.Child(processKind, h.Name).String()
 	_, ok := m.registry[address]
 	m.mux.Unlock()
 
 	if !ok {
-		m.logEvent(context.TODO(), m, processorNotFoundEvent.WithInfo(reflect.TypeOf(t).String()))
-		newProcessor(m, t)
-		m.logEvent(context.TODO(), m, processorInitializedEvent.WithInfo(reflect.TypeOf(t).String()))
+		m.logEvent(context.TODO(), m, processorNotFoundEvent.WithInfo(h.Name))
+		newProcessor(m, h)
 	}
 
+	// Only return the address of a processor when it is available
 	return <-m.registry[address].(*processor).chAvailable
 }
 
@@ -186,8 +157,6 @@ func (m *Manager) Receive(e envelope) {
 	switch e.Message.(type) {
 	case Job:
 		m.handleJob(e)
-	case Process:
-		m.handleProcess(e)
 	default:
 		m.logEvent(e.ctx, m, unsupportedMessageEvent)
 	}

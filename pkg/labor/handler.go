@@ -6,7 +6,8 @@ import (
 )
 
 type Handler struct {
-	execute       func(ctx context.Context, t Task, data any) Process
-	maxConcurrent int
-	timeout       time.Duration
+	Name          string
+	Execute       func(ctx context.Context, p Pipeline) Pipeline
+	MaxConcurrent int
+	Timeout       time.Duration
 }
