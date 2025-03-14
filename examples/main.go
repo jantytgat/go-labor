@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -17,10 +18,10 @@ var (
 	logLevel          = slog.LevelInfo
 	eventLogLevel     = slog.LevelDebug
 	managerName       = "example"
-	maxJobs       int = 2000
-	maxCustomers      = 10
-	// maxOperators  int = runtime.NumCPU() * maxCustomers * 2
-	maxOperators = 2
+	maxJobs       int = 200
+	maxCustomers      = 100
+	maxOperators  int = runtime.NumCPU() * maxCustomers * 2
+	// maxOperators = 2
 )
 
 func main() {
@@ -125,7 +126,7 @@ Detect:
 			break Detect
 		}
 	}
-
+	fmt.Println("Max Operators:", maxOperators)
 	fmt.Println("Processed requests:", requests)
 	fmt.Println("Processed responses:", responses)
 	fmt.Println("Total time:", duration)
