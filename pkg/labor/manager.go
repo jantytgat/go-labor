@@ -54,7 +54,7 @@ type Manager struct {
 	chOperator         chan Addressable
 	registry           map[string]Addressable
 	broadcastListeners []Addressable
-	mux                sync.RWMutex
+	mux                sync.Mutex
 }
 
 func (m *Manager) Address() *Address {
@@ -62,8 +62,8 @@ func (m *Manager) Address() *Address {
 }
 
 func (m *Manager) broadcast(e envelope) {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
+	m.mux.Lock()
+	defer m.mux.Unlock()
 	for _, broadcast := range m.broadcastListeners {
 		if broadcast != nil {
 			broadcast.Receive(e)
@@ -123,19 +123,19 @@ func (m *Manager) handleJob(e envelope) {
 }
 
 func (m *Manager) IsEnabled() bool {
-	m.mux.RLock()
-	defer m.mux.RUnlock()
+	m.mux.Lock()
+	defer m.mux.Unlock()
 	return m.enabled
 }
 
 func (m *Manager) logEvent(ctx context.Context, sender Addressable, event Event) {
-	//if m.eventLogLevel >= event.Level {
+	// if m.eventLogLevel >= event.Level {
 	m.eventLogger.LogAttrs(
 		ctx,
 		event.Level,
 		event.String(),
 		event.LogValue(sender.Address()))
-	//}
+	// }
 }
 
 func (m *Manager) processor(h Handler) Addressable {
@@ -145,7 +145,6 @@ func (m *Manager) processor(h Handler) Addressable {
 	m.mux.Unlock()
 
 	if !ok {
-		m.logEvent(context.TODO(), m, processorNotFoundEvent.WithInfo(h.Name))
 		newProcessor(m, h)
 	}
 

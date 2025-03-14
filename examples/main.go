@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/jantytgat/go-labor/pkg/tasks"
 	"log/slog"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/jantytgat/go-labor/pkg/tasks"
 
 	"github.com/jantytgat/go-labor/pkg/labor"
 )
@@ -16,24 +17,24 @@ var (
 	logLevel          = slog.LevelInfo
 	eventLogLevel     = slog.LevelDebug
 	managerName       = "example"
-	maxJobs       int = 200
+	maxJobs       int = 2000
 	maxCustomers      = 10
-	//maxOperators  int = runtime.NumCPU() * maxCustomers * 2
+	// maxOperators  int = runtime.NumCPU() * maxCustomers * 2
 	maxOperators = 2
 )
 
 func main() {
-	//var cpuProfile, memProfile *os.File
-	//var err error
-	//cpuProfile, err = os.Create("examples/cpu.profile.log")
-	//if err != nil {
+	// var cpuProfile, memProfile *os.File
+	// var err error
+	// cpuProfile, err = os.Create("examples/cpu.profile.log")
+	// if err != nil {
 	//	panic(err)
-	//}
-	//defer cpuProfile.Close()
-	//if err = pprof.StartCPUProfile(cpuProfile); err != nil {
+	// }
+	// defer cpuProfile.Close()
+	// if err = pprof.StartCPUProfile(cpuProfile); err != nil {
 	//	panic(err)
-	//}
-	//defer pprof.StopCPUProfile()
+	// }
+	// defer pprof.StopCPUProfile()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	mc := labor.ManagerConfig{
@@ -88,7 +89,7 @@ func main() {
 						return
 					default:
 						if res := c.Receive(ctx); res != nil {
-							//logger.Log(ctx, slog.LevelInfo, "received reply", slog.Any("reply", res))
+							// logger.Log(ctx, slog.LevelInfo, "received reply", slog.Any("reply", res))
 						}
 					}
 				}
@@ -129,16 +130,16 @@ Detect:
 	fmt.Println("Processed responses:", responses)
 	fmt.Println("Total time:", duration)
 	//
-	//memProfile, err = os.Create("examples/mem.profile.log")
-	//if err != nil {
+	// memProfile, err = os.Create("examples/mem.profile.log")
+	// if err != nil {
 	//	panic(err)
-	//}
-	//defer memProfile.Close()
-	//runtime.GC()
-	//if err = pprof.Lookup("allocs").WriteTo(memProfile, 2); err != nil {
+	// }
+	// defer memProfile.Close()
+	// runtime.GC()
+	// if err = pprof.Lookup("allocs").WriteTo(memProfile, 2); err != nil {
 	//	panic(err)
-	//}
-	//if err = pprof.Lookup("heap").WriteTo(memProfile, 2); err != nil {
+	// }
+	// if err = pprof.Lookup("heap").WriteTo(memProfile, 2); err != nil {
 	//	panic(err)
-	//}
+	// }
 }
